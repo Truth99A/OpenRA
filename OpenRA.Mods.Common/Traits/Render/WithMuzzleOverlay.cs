@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -12,12 +13,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
-namespace OpenRA.Mods.Common.Traits
+namespace OpenRA.Mods.Common.Traits.Render
 {
 	[Desc("Renders the MuzzleSequence from the Armament trait.")]
-	class WithMuzzleOverlayInfo : UpgradableTraitInfo, Requires<RenderSpritesInfo>, Requires<AttackBaseInfo>, Requires<ArmamentInfo>
+	class WithMuzzleOverlayInfo : ConditionalTraitInfo, Requires<RenderSpritesInfo>, Requires<AttackBaseInfo>, Requires<ArmamentInfo>
 	{
 		[Desc("Ignore the weapon position, and always draw relative to the center of the actor")]
 		public readonly bool IgnoreOffset = false;
@@ -25,7 +27,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new WithMuzzleOverlay(init.Self, this); }
 	}
 
-	class WithMuzzleOverlay : UpgradableTrait<WithMuzzleOverlayInfo>, INotifyAttack, IRender, ITick
+	class WithMuzzleOverlay : ConditionalTrait<WithMuzzleOverlayInfo>, INotifyAttack, IRender, ITick
 	{
 		readonly Dictionary<Barrel, bool> visible = new Dictionary<Barrel, bool>();
 		readonly Dictionary<Barrel, AnimationWithOffset> anims = new Dictionary<Barrel, AnimationWithOffset>();
@@ -38,16 +40,12 @@ namespace OpenRA.Mods.Common.Traits
 			var render = self.Trait<RenderSprites>();
 			var facing = self.TraitOrDefault<IFacing>();
 
-			armaments = self.TraitsImplementing<Armament>().ToArray();
+			armaments = self.TraitsImplementing<Armament>()
+				.Where(arm => arm.Info.MuzzleSequence != null)
+				.ToArray();
 
 			foreach (var arm in armaments)
 			{
-				var armClosure = arm;	// closure hazard in AnimationWithOffset
-
-				// Skip armaments that don't define muzzles
-				if (arm.Info.MuzzleSequence == null)
-					continue;
-
 				foreach (var b in arm.Barrels)
 				{
 					var barrel = b;
@@ -59,7 +57,7 @@ namespace OpenRA.Mods.Common.Traits
 					if (turreted != null)
 						getFacing = () => turreted.TurretFacing;
 					else if (facing != null)
-						getFacing = (Func<int>)(() => facing.Facing);
+						getFacing = () => facing.Facing;
 					else
 						getFacing = () => 0;
 
@@ -67,52 +65,52 @@ namespace OpenRA.Mods.Common.Traits
 					visible.Add(barrel, false);
 					anims.Add(barrel,
 						new AnimationWithOffset(muzzleFlash,
-							() => info.IgnoreOffset ? WVec.Zero : armClosure.MuzzleOffset(self, barrel),
+							() => info.IgnoreOffset ? WVec.Zero : arm.MuzzleOffset(self, barrel),
 							() => IsTraitDisabled || !visible[barrel],
 							p => RenderUtils.ZOffsetFromCenter(self, p, 2)));
 				}
 			}
 		}
 
-		public void Attacking(Actor self, Target target, Armament a, Barrel barrel)
+		void INotifyAttack.Attacking(Actor self, Target target, Armament a, Barrel barrel)
 		{
-			if (a == null)
+			if (a == null || barrel == null || !armaments.Contains(a))
 				return;
 
 			var sequence = a.Info.MuzzleSequence;
-			if (sequence == null)
-				return;
-
 			if (a.Info.MuzzleSplitFacings > 0)
-				sequence += OpenRA.Traits.Util.QuantizeFacing(getFacing(), a.Info.MuzzleSplitFacings).ToString();
-
-			if (barrel == null)
-				return;
+				sequence += Util.QuantizeFacing(getFacing(), a.Info.MuzzleSplitFacings).ToString();
 
 			visible[barrel] = true;
 			anims[barrel].Animation.PlayThen(sequence, () => visible[barrel] = false);
 		}
 
-		public IEnumerable<IRenderable> Render(Actor self, WorldRenderer wr)
+		void INotifyAttack.PreparingAttack(Actor self, Target target, Armament a, Barrel barrel) { }
+
+		IEnumerable<IRenderable> IRender.Render(Actor self, WorldRenderer wr)
 		{
 			foreach (var arm in armaments)
 			{
 				var palette = wr.Palette(arm.Info.MuzzlePalette);
-				foreach (var kv in anims)
+				foreach (var b in arm.Barrels)
 				{
-					if (!visible[kv.Key])
+					var anim = anims[b];
+					if (anim.DisableFunc != null && anim.DisableFunc())
 						continue;
 
-					if (kv.Value.DisableFunc != null && kv.Value.DisableFunc())
-						continue;
-
-					foreach (var r in kv.Value.Render(self, wr, palette, 1f))
+					foreach (var r in anim.Render(self, wr, palette, 1f))
 						yield return r;
 				}
 			}
 		}
 
-		public void Tick(Actor self)
+		IEnumerable<Rectangle> IRender.ScreenBounds(Actor self, WorldRenderer wr)
+		{
+			// Muzzle flashes don't contribute to actor bounds
+			yield break;
+		}
+
+		void ITick.Tick(Actor self)
 		{
 			foreach (var a in anims.Values)
 				a.Animation.Tick();

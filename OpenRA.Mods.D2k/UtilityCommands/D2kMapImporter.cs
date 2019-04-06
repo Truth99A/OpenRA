@@ -1,35 +1,35 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
- * Copyright 2007-2014 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using OpenRA.Primitives;
 
 namespace OpenRA.Mods.D2k.UtilityCommands
 {
-	class D2kMapImporter
+	public class D2kMapImporter
 	{
 		const int MapCordonWidth = 2;
 
-		readonly Dictionary<int, Pair<string, string>> actorDataByActorCode = new Dictionary<int, Pair<string, string>>
+		public static Dictionary<int, Pair<string, string>> ActorDataByActorCode = new Dictionary<int, Pair<string, string>>
 		{
 			{ 20, Pair.New("wormspawner", "Creeps") },
 			{ 23, Pair.New("mpspawn", "Neutral") },
-			{ 41, Pair.New("spicebloom", "Neutral") },
-			{ 42, Pair.New("spicebloom", "Neutral") },
-			{ 43, Pair.New("spicebloom", "Neutral") },
-			{ 44, Pair.New("spicebloom", "Neutral") },
-			{ 45, Pair.New("spicebloom", "Neutral") },
+			{ 41, Pair.New("spicebloom.spawnpoint", "Neutral") },
+			{ 42, Pair.New("spicebloom.spawnpoint", "Neutral") },
+			{ 43, Pair.New("spicebloom.spawnpoint", "Neutral") },
+			{ 44, Pair.New("spicebloom.spawnpoint", "Neutral") },
+			{ 45, Pair.New("spicebloom.spawnpoint", "Neutral") },
 
 			// Atreides:
 			{ 4, Pair.New("wall", "Atreides") },
@@ -83,7 +83,7 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 			{ 360, Pair.New("light_inf", "Harkonnen") },
 			{ 361, Pair.New("trooper", "Harkonnen") },
 			{ 362, Pair.New("fremen", "Harkonnen") },
-			{ 363, Pair.New("sardaukar", "Harkonnen") },
+			{ 363, Pair.New("mpsardaukar", "Harkonnen") },
 			{ 364, Pair.New("engineer", "Harkonnen") },
 			{ 365, Pair.New("harvester", "Harkonnen") },
 			{ 366, Pair.New("mcv", "Harkonnen") },
@@ -93,7 +93,7 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 			{ 370, Pair.New("missile_tank", "Harkonnen") },
 			{ 371, Pair.New("siege_tank", "Harkonnen") },
 			{ 372, Pair.New("carryall", "Harkonnen") },
-			{ 374, Pair.New("devast", "Harkonnen") },
+			{ 374, Pair.New("devastator", "Harkonnen") },
 
 			// Ordos:
 			{ 404, Pair.New("wall", "Ordos") },
@@ -125,7 +125,7 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 			{ 570, Pair.New("missile_tank", "Ordos") },
 			{ 571, Pair.New("siege_tank", "Ordos") },
 			{ 572, Pair.New("carryall", "Ordos") },
-			{ 574, Pair.New("deviatortank", "Ordos") },
+			{ 574, Pair.New("deviator", "Ordos") },
 
 			// Corrino:
 			{ 580, Pair.New("wall", "Corrino") },
@@ -167,7 +167,7 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 			{ 624, Pair.New("refinery", "Fremen") },
 			{ 625, Pair.New("outpost", "Fremen") },
 			{ 627, Pair.New("light_factory", "Fremen") },
-			{ 628, Pair.New("palacec", "Fremen") },
+			{ 628, Pair.New("palace", "Fremen") },
 			{ 629, Pair.New("silo", "Fremen") },
 			{ 630, Pair.New("heavy_factory", "Fremen") },
 			{ 631, Pair.New("repair_pad", "Fremen") },
@@ -262,6 +262,7 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 		Size mapSize;
 		TileSet tileSet;
 		List<TerrainTemplateInfo> tileSetsFromYaml;
+		int playerCount;
 
 		D2kMapImporter(string filename, string tileset, Ruleset rules)
 		{
@@ -274,7 +275,7 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 				stream = File.OpenRead(filename);
 
 				if (stream.Length == 0 || stream.Length % 4 != 0)
-					throw new Exception("The map is in an unrecognized format!");
+					throw new ArgumentException("The map is in an unrecognized format!", "filename");
 
 				Initialize(filename);
 				FillMap();
@@ -292,13 +293,12 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 
 		public static Map Import(string filename, string mod, string tileset, Ruleset rules)
 		{
-			var map = new D2kMapImporter(filename, tileset, rules).map;
+			var importer = new D2kMapImporter(filename, tileset, rules);
+			var map = importer.map;
 			if (map == null)
 				return null;
 
 			map.RequiresMod = mod;
-			var players = new MapPlayers(map.Rules, map.SpawnPoints.Value.Length);
-			map.PlayerDefinitions = players.ToMiniYaml();
 
 			return map;
 		}
@@ -307,9 +307,9 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 		{
 			mapSize = new Size(stream.ReadUInt16(), stream.ReadUInt16());
 
-			tileSet = rules.TileSets["ARRAKIS"];
+			tileSet = Game.ModData.DefaultTileSets["ARRAKIS"];
 
-			map = new Map(tileSet, mapSize.Width + 2 * MapCordonWidth, mapSize.Height + 2 * MapCordonWidth)
+			map = new Map(Game.ModData, tileSet, mapSize.Width + 2 * MapCordonWidth, mapSize.Height + 2 * MapCordonWidth)
 			{
 				Title = Path.GetFileNameWithoutExtension(mapFile),
 				Author = "Westwood Studios"
@@ -323,6 +323,9 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 			// Each frame is a tile from the Dune 2000 tileset files, with the Frame ID being the index of the tile in the original file
 			tileSetsFromYaml = tileSet.Templates.Where(t => t.Value.Frames != null
 				&& t.Value.Images[0].ToLower() == tilesetName.ToLower()).Select(ts => ts.Value).ToList();
+
+			var players = new MapPlayers(map.Rules, playerCount);
+			map.PlayerDefinitions = players.ToMiniYaml();
 		}
 
 		void FillMap()
@@ -335,18 +338,18 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 
 				var locationOnMap = GetCurrentTilePositionOnMap();
 
-				map.MapTiles.Value[locationOnMap] = tile;
+				map.Tiles[locationOnMap] = tile;
 
 				// Spice
 				if (tileSpecialInfo == 1)
-					map.MapResources.Value[locationOnMap] = new ResourceTile(1, 1);
+					map.Resources[locationOnMap] = new ResourceTile(1, 1);
 				if (tileSpecialInfo == 2)
-					map.MapResources.Value[locationOnMap] = new ResourceTile(1, 2);
+					map.Resources[locationOnMap] = new ResourceTile(1, 2);
 
 				// Actors
-				if (actorDataByActorCode.ContainsKey(tileSpecialInfo))
+				if (ActorDataByActorCode.ContainsKey(tileSpecialInfo))
 				{
-					var kvp = actorDataByActorCode[tileSpecialInfo];
+					var kvp = ActorDataByActorCode[tileSpecialInfo];
 					if (!rules.Actors.ContainsKey(kvp.First.ToLower()))
 						throw new InvalidOperationException("Actor with name {0} could not be found in the rules YAML file!".F(kvp.First));
 
@@ -355,7 +358,11 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 						new LocationInit(locationOnMap),
 						new OwnerInit(kvp.Second)
 					};
+
 					map.ActorDefinitions.Add(new MiniYamlNode("Actor" + map.ActorDefinitions.Count, a.Save()));
+
+					if (kvp.First == "mpspawn")
+						playerCount++;
 				}
 			}
 		}
@@ -372,6 +379,88 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 
 		TerrainTile GetTile(int tileIndex)
 		{
+			// Some tiles are duplicates of other tiles, just on a different tileset
+			if (tilesetName.ToLower() == "bloxbgbs.r8")
+			{
+				if (tileIndex == 355)
+					return new TerrainTile(441, 0);
+
+				if (tileIndex == 375)
+					return new TerrainTile(442, 0);
+			}
+
+			if (tilesetName.ToLower() == "bloxtree.r8")
+			{
+				var indices = new[] { 683, 684, 685, 706, 703, 704, 705, 726, 723, 724, 725, 746, 743, 744, 745, 747 };
+				for (var i = 0; i < 16; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(474, (byte)i);
+
+				indices = new[] { 369, 370, 389, 390 };
+				for (var i = 0; i < 4; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(117, (byte)i);
+
+				indices = new[] { 661, 662, 681, 682 };
+				for (var i = 0; i < 4; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(251, (byte)i);
+
+				if (tileIndex == 322)
+					return new TerrainTile(215, 0);
+			}
+
+			if (tilesetName.ToLower() == "bloxwast.r8")
+			{
+				if (tileIndex == 342)
+					return new TerrainTile(250, 0);
+
+				if (tileIndex == 383)
+					return new TerrainTile(121, 1);
+
+				if (tileIndex == 384)
+					return new TerrainTile(1046, 0);
+
+				if (tileIndex == 579)
+					return new TerrainTile(80, 0);
+
+				if (tileIndex == 597)
+					return new TerrainTile(80, 0);
+
+				if (tileIndex == 598)
+					return new TerrainTile(470, 0);
+
+				if (tileIndex == 599)
+					return new TerrainTile(470, 1);
+
+				if (tileIndex == 608)
+					return new TerrainTile(58, 0);
+
+				if (tileIndex == 627)
+					return new TerrainTile(248, 0);
+
+				if (tileIndex == 628)
+					return new TerrainTile(248, 1);
+
+				if (tileIndex == 719)
+					return new TerrainTile(275, 0);
+
+				var indices = new[] { 340, 341, 360, 361 };
+				for (var i = 0; i < 4; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(308, (byte)i);
+
+				indices = new[] { 660, 661, 662, 680, 681, 682 };
+				for (var i = 0; i < 6; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(443, (byte)i);
+
+				indices = new[] { 609, 610, 629, 630 };
+				for (var i = 0; i < 4; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(251, (byte)i);
+			}
+
 			// Get the first tileset template that contains the Frame ID of the original map's tile with the requested index
 			var template = tileSetsFromYaml.FirstOrDefault(x => x.Frames.Contains(tileIndex));
 

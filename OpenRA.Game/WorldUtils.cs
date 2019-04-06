@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -12,7 +13,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using OpenRA.GameRules;
 using OpenRA.Support;
 using OpenRA.Traits;
 
@@ -30,15 +30,37 @@ namespace OpenRA
 			return actors.MinByOrDefault(a => (a.CenterPosition - pos).LengthSquared);
 		}
 
+		public static WPos PositionClosestTo(this IEnumerable<WPos> positions, WPos pos)
+		{
+			return positions.MinByOrDefault(p => (p - pos).LengthSquared);
+		}
+
 		public static IEnumerable<Actor> FindActorsInCircle(this World world, WPos origin, WDist r)
 		{
-			using (new PerfSample("FindUnitsInCircle"))
+			// Target ranges are calculated in 2D, so ignore height differences
+			var vec = new WVec(r, r, WDist.Zero);
+			return world.ActorMap.ActorsInBox(origin - vec, origin + vec).Where(
+				a => (a.CenterPosition - origin).HorizontalLengthSquared <= r.LengthSquared);
+		}
+
+		public static bool ContainsTemporaryBlocker(this World world, CPos cell, Actor ignoreActor = null)
+		{
+			if (!world.RulesContainTemporaryBlocker)
+				return false;
+
+			var temporaryBlockers = world.ActorMap.GetActorsAt(cell);
+			foreach (var temporaryBlocker in temporaryBlockers)
 			{
-				// Target ranges are calculated in 2D, so ignore height differences
-				var vec = new WVec(r, r, WDist.Zero);
-				return world.ActorMap.ActorsInBox(origin - vec, origin + vec).Where(
-					a => (a.CenterPosition - origin).HorizontalLengthSquared <= r.LengthSquared);
+				if (temporaryBlocker == ignoreActor)
+					continue;
+
+				var temporaryBlockerTraits = temporaryBlocker.TraitsImplementing<ITemporaryBlocker>();
+				foreach (var temporaryBlockerTrait in temporaryBlockerTraits)
+					if (temporaryBlockerTrait.IsBlocking(temporaryBlocker, cell))
+						return true;
 			}
+
+			return false;
 		}
 
 		public static void DoTimed<T>(this IEnumerable<T> e, Action<T> a, string text)

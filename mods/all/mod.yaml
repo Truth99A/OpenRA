@@ -1,13 +1,9 @@
 Metadata:
 	Title: All mods
 	Version: {DEV_VERSION}
-	Author: The OpenRA Developers
 	Hidden: true
-	Description: Depending on all DLLs.
 
-RequiresMods:
-
-Folders:
+Packages:
 	.
 
 Cursors:
@@ -16,10 +12,8 @@ Chrome:
 
 Assemblies:
 	./mods/common/OpenRA.Mods.Common.dll
-	./mods/ra/OpenRA.Mods.RA.dll
+	./mods/common/OpenRA.Mods.Cnc.dll
 	./mods/d2k/OpenRA.Mods.D2k.dll
-	./mods/cnc/OpenRA.Mods.Cnc.dll
-	./mods/ts/OpenRA.Mods.TS.dll
 
 ChromeLayout:
 
@@ -31,8 +25,10 @@ ChromeMetrics:
 
 Fonts:
 
-LobbyDefaults:
+SoundFormats:
 
 SpriteFormats:
 
 SpriteSequenceFormat: DefaultSpriteSequence
+
+ModelSequenceFormat: PlaceholderModelSequence

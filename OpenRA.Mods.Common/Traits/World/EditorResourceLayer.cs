@@ -1,21 +1,19 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using OpenRA.Graphics;
-using OpenRA.Mods.Common.Graphics;
-using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
@@ -40,19 +38,21 @@ namespace OpenRA.Mods.Common.Traits
 
 		public int NetWorth { get; protected set; }
 
+		bool disposed;
+
 		public EditorResourceLayer(Actor self)
 		{
 			if (self.World.Type != WorldType.Editor)
 				return;
 
 			Map = self.World.Map;
-			Tileset = self.World.TileSet;
+			Tileset = self.World.Map.Rules.TileSet;
 
 			Tiles = new CellLayer<CellContents>(Map);
 			Resources = self.TraitsImplementing<ResourceType>()
 				.ToDictionary(r => r.Info.ResourceType, r => r);
 
-			Map.MapResources.Value.CellEntryChanged += UpdateCell;
+			Map.Resources.CellEntryChanged += UpdateCell;
 		}
 
 		public void WorldLoaded(World w, WorldRenderer wr)
@@ -89,11 +89,11 @@ namespace OpenRA.Mods.Common.Traits
 		public void UpdateCell(CPos cell)
 		{
 			var uv = cell.ToMPos(Map);
-			var tile = Map.MapResources.Value[uv];
+			var tile = Map.Resources[uv];
 
 			var t = Tiles[cell];
 			if (t.Density > 0)
-				NetWorth -= t.Density * t.Type.Info.ValuePerUnit;
+				NetWorth -= (t.Density + 1) * t.Type.Info.ValuePerUnit;
 
 			ResourceType type;
 			if (Resources.TryGetValue(tile.Type, out type))
@@ -129,7 +129,7 @@ namespace OpenRA.Mods.Common.Traits
 			// Set density based on the number of neighboring resources
 			var adjacent = 0;
 			var type = Tiles[c].Type;
-			var resources = Map.MapResources.Value;
+			var resources = Map.Resources;
 			for (var u = -1; u < 2; u++)
 			{
 				for (var v = -1; v < 2; v++)
@@ -155,21 +155,23 @@ namespace OpenRA.Mods.Common.Traits
 				return t;
 			}
 
-			NetWorth -= t.Density * type.Info.ValuePerUnit;
+			// Density + 1 as workaround for fixing ResourceLayer.Harvest as it would be very disruptive to balancing
+			if (t.Density > 0)
+				NetWorth -= (t.Density + 1) * type.Info.ValuePerUnit;
 
 			// Set density based on the number of neighboring resources
 			t.Density = ResourceDensityAt(c);
 
-			NetWorth += t.Density * type.Info.ValuePerUnit;
+			NetWorth += (t.Density + 1) * type.Info.ValuePerUnit;
 
 			var sprites = type.Variants[t.Variant];
-			var frame = int2.Lerp(0, sprites.Length - 1, t.Density - 1, type.Info.MaxDensity);
+			var frame = int2.Lerp(0, sprites.Length - 1, t.Density, type.Info.MaxDensity);
 			t.Sprite = sprites[frame];
 
 			return t;
 		}
 
-		public void Render(WorldRenderer wr)
+		void IRenderOverlay.Render(WorldRenderer wr)
 		{
 			if (wr.World.Type != WorldType.Editor)
 				return;
@@ -198,8 +200,7 @@ namespace OpenRA.Mods.Common.Traits
 				l.Draw(wr.Viewport);
 		}
 
-		bool disposed;
-		public void Disposing(Actor self)
+		void INotifyActorDisposing.Disposing(Actor self)
 		{
 			if (disposed)
 				return;
@@ -207,7 +208,7 @@ namespace OpenRA.Mods.Common.Traits
 			foreach (var kv in spriteLayers.Values)
 				kv.Dispose();
 
-			Map.MapResources.Value.CellEntryChanged -= UpdateCell;
+			Map.Resources.CellEntryChanged -= UpdateCell;
 
 			disposed = true;
 		}

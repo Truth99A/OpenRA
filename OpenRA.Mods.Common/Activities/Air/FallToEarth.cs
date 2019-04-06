@@ -1,16 +1,16 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System.Linq;
 using OpenRA.Activities;
-using OpenRA.GameRules;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Traits;
 
@@ -26,6 +26,7 @@ namespace OpenRA.Mods.Common.Activities
 		public FallToEarth(Actor self, FallsToEarthInfo info)
 		{
 			this.info = info;
+			IsInterruptible = false;
 			aircraft = self.Trait<Aircraft>();
 			if (info.Spins)
 				acceleration = self.World.SharedRandom.Next(2) * 2 - 1;
@@ -41,7 +42,7 @@ namespace OpenRA.Mods.Common.Activities
 					info.ExplosionWeapon.Impact(Target.FromPos(self.CenterPosition), self, Enumerable.Empty<int>());
 				}
 
-				self.Dispose();
+				self.Kill(self);
 				return null;
 			}
 
@@ -57,8 +58,5 @@ namespace OpenRA.Mods.Common.Activities
 
 			return this;
 		}
-
-		// Cannot be cancelled
-		public override void Cancel(Actor self) { }
 	}
 }

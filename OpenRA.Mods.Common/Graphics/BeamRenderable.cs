@@ -1,15 +1,16 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System.Drawing;
 using OpenRA.Graphics;
+using OpenRA.Primitives;
 
 namespace OpenRA.Mods.Common.Graphics
 {
@@ -54,16 +55,16 @@ namespace OpenRA.Mods.Common.Graphics
 			{
 				var delta = length * width.Length / (2 * vecLength);
 				var corner = new WVec(-delta.Y, delta.X, delta.Z);
-				var a = wr.ScreenPosition(pos - corner);
-				var b = wr.ScreenPosition(pos + corner);
-				var c = wr.ScreenPosition(pos + corner + length);
-				var d = wr.ScreenPosition(pos - corner + length);
+				var a = wr.Screen3DPosition(pos - corner);
+				var b = wr.Screen3DPosition(pos + corner);
+				var c = wr.Screen3DPosition(pos + corner + length);
+				var d = wr.Screen3DPosition(pos - corner + length);
 				Game.Renderer.WorldRgbaColorRenderer.FillRect(a, b, c, d, color);
 			}
 			else
 			{
-				var start = wr.ScreenPosition(pos);
-				var end = wr.ScreenPosition(pos + length);
+				var start = wr.Screen3DPosition(pos);
+				var end = wr.Screen3DPosition(pos + length);
 				var screenWidth = wr.ScreenVector(new WVec(width, WDist.Zero, WDist.Zero))[0];
 				Game.Renderer.WorldRgbaColorRenderer.DrawLine(start, end, screenWidth, color);
 			}

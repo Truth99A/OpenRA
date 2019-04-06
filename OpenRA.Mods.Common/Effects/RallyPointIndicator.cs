@@ -1,22 +1,22 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System.Collections.Generic;
-using System.Linq;
 using OpenRA.Effects;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Traits;
 
 namespace OpenRA.Mods.Common.Effects
 {
-	class RallyPointIndicator : IEffect
+	class RallyPointIndicator : IEffect, IEffectAboveShroud
 	{
 		readonly Actor building;
 		readonly RallyPoint rp;
@@ -33,17 +33,23 @@ namespace OpenRA.Mods.Common.Effects
 			this.rp = rp;
 			this.exits = exits;
 
-			flag = new Animation(building.World, rp.Info.Image);
-			flag.PlayRepeating(rp.Info.FlagSequence);
+			if (rp.Info.Image != null)
+			{
+				flag = new Animation(building.World, rp.Info.Image);
+				flag.PlayRepeating(rp.Info.FlagSequence);
 
-			circles = new Animation(building.World, rp.Info.Image);
-			circles.Play(rp.Info.CirclesSequence);
+				circles = new Animation(building.World, rp.Info.Image);
+				circles.Play(rp.Info.CirclesSequence);
+			}
 		}
 
-		public void Tick(World world)
+		void IEffect.Tick(World world)
 		{
-			flag.Tick();
-			circles.Tick();
+			if (flag != null)
+				flag.Tick();
+
+			if (circles != null)
+				circles.Tick();
 
 			if (cachedLocation != rp.Location)
 			{
@@ -68,19 +74,22 @@ namespace OpenRA.Mods.Common.Effects
 				targetLine[0] = exitPos;
 				targetLine[1] = rallyPos;
 
-				circles.Play(rp.Info.CirclesSequence);
+				if (circles != null)
+					circles.Play(rp.Info.CirclesSequence);
 			}
 
 			if (!building.IsInWorld || building.IsDead)
 				world.AddFrameEndTask(w => w.Remove(this));
 		}
 
-		public IEnumerable<IRenderable> Render(WorldRenderer wr)
+		IEnumerable<IRenderable> IEffect.Render(WorldRenderer wr) { return SpriteRenderable.None; }
+
+		IEnumerable<IRenderable> IEffectAboveShroud.RenderAboveShroud(WorldRenderer wr)
 		{
 			if (!building.IsInWorld || !building.Owner.IsAlliedWith(building.World.LocalPlayer))
 				return SpriteRenderable.None;
 
-			if (!building.World.Selection.Actors.Contains(building))
+			if (!building.World.Selection.Contains(building))
 				return SpriteRenderable.None;
 
 			return RenderInner(wr);
@@ -88,16 +97,21 @@ namespace OpenRA.Mods.Common.Effects
 
 		IEnumerable<IRenderable> RenderInner(WorldRenderer wr)
 		{
-			var palette = wr.Palette(rp.PaletteName);
-
 			if (Game.Settings.Game.DrawTargetLine)
-				yield return new TargetLineRenderable(targetLine, building.Owner.Color.RGB);
+				yield return new TargetLineRenderable(targetLine, building.Owner.Color);
 
-			foreach (var r in circles.Render(targetLine[1], palette))
-				yield return r;
+			if (circles != null || flag != null)
+			{
+				var palette = wr.Palette(rp.PaletteName);
 
-			foreach (var r in flag.Render(targetLine[1], palette))
-				yield return r;
+				if (circles != null)
+					foreach (var r in circles.Render(targetLine[1], palette))
+						yield return r;
+
+				if (flag != null)
+					foreach (var r in flag.Render(targetLine[1], palette))
+						yield return r;
+			}
 		}
 	}
 }

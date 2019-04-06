@@ -1,14 +1,16 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
+using OpenRA.Mods.Common.Traits;
 using OpenRA.Network;
 using OpenRA.Widgets;
 
@@ -39,12 +41,17 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			if (timer != null)
 			{
+				// Timers in replays should be synced to the effective game time, not the playback time.
+				var timestep = world.Timestep;
+				if (world.IsReplay)
+					timestep = world.WorldActor.Trait<MapOptions>().GameSpeed.Timestep;
+
 				timer.GetText = () =>
 				{
 					if (status == null && shouldShowStatus())
 						return statusText();
 
-					return WidgetUtils.FormatTime(world.WorldTick, world.Timestep);
+					return WidgetUtils.FormatTime(world.WorldTick, timestep);
 				};
 			}
 
@@ -55,14 +62,16 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				status.GetText = statusText;
 			}
 
-			var percentage = widget.GetOrNull<LabelWidget>("GAME_TIMER_PERCENTAGE");
-			if (percentage != null)
+			var timerTooltip = timer as LabelWithTooltipWidget;
+			if (timerTooltip != null)
 			{
 				var connection = orderManager.Connection as ReplayConnection;
-				if (connection != null && connection.TickCount != 0)
-					percentage.GetText = () => "({0}%)".F(orderManager.NetFrameNumber * 100 / connection.TickCount);
-				else if (timer != null)
-					timer.Bounds.Width += percentage.Bounds.Width;
+				if (connection != null && connection.FinalGameTick != 0)
+					timerTooltip.GetTooltipText = () => "{0}% complete".F(world.WorldTick * 100 / connection.FinalGameTick);
+				else if (connection != null && connection.TickCount != 0)
+					timerTooltip.GetTooltipText = () => "{0}% complete".F(orderManager.NetFrameNumber * 100 / connection.TickCount);
+				else
+					timerTooltip.GetTooltipText = null;
 			}
 		}
 	}

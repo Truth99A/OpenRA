@@ -1,23 +1,24 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System.Drawing;
 using OpenRA.Graphics;
+using OpenRA.Primitives;
 
 namespace OpenRA.Mods.Common.Graphics
 {
 	public struct RangeCircleRenderable : IRenderable, IFinalizedRenderable
 	{
 		const int RangeCircleSegments = 32;
-		static readonly int[][] RangeCircleStartRotations = Exts.MakeArray(RangeCircleSegments, i => WRot.FromFacing(8 * i).AsMatrix());
-		static readonly int[][] RangeCircleEndRotations = Exts.MakeArray(RangeCircleSegments, i => WRot.FromFacing(8 * i + 6).AsMatrix());
+		static readonly Int32Matrix4x4[] RangeCircleStartRotations = Exts.MakeArray(RangeCircleSegments, i => WRot.FromFacing(8 * i).AsMatrix());
+		static readonly Int32Matrix4x4[] RangeCircleEndRotations = Exts.MakeArray(RangeCircleSegments, i => WRot.FromFacing(8 * i + 6).AsMatrix());
 
 		readonly WPos centerPosition;
 		readonly WDist radius;
@@ -55,10 +56,10 @@ namespace OpenRA.Mods.Common.Graphics
 		{
 			var wcr = Game.Renderer.WorldRgbaColorRenderer;
 			var offset = new WVec(radius.Length, 0, 0);
-			for (var i = 0; i < RangeCircleRenderable.RangeCircleSegments; i++)
+			for (var i = 0; i < RangeCircleSegments; i++)
 			{
-				var a = wr.ScreenPosition(centerPosition + offset.Rotate(RangeCircleRenderable.RangeCircleStartRotations[i]));
-				var b = wr.ScreenPosition(centerPosition + offset.Rotate(RangeCircleRenderable.RangeCircleEndRotations[i]));
+				var a = wr.Screen3DPosition(centerPosition + offset.Rotate(ref RangeCircleStartRotations[i]));
+				var b = wr.Screen3DPosition(centerPosition + offset.Rotate(ref RangeCircleEndRotations[i]));
 
 				if (contrastWidth > 0)
 					wcr.DrawLine(a, b, contrastWidth / wr.Viewport.Zoom, contrastColor);

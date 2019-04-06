@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 RifleReinforcments = { "e1", "e1", "e1", "bike" }
 BazookaReinforcments = { "e3", "e3", "e3", "bike" }
 BikeReinforcments = { "bike" }
@@ -76,10 +84,10 @@ WorldLoaded = function()
 	Trigger.OnIdle(DinoTrex, DinoTrex.Hunt)
 
 	ReinforceWithLandingCraft(RifleReinforcments, SeaEntryA.Location, BeachReinforceA.Location, BeachReinforceA.Location)
-	Trigger.AfterDelay(DateTime.Seconds(1), function() InitialUnitsArrived = true end)
+	Trigger.AfterDelay(DateTime.Seconds(3), function() InitialUnitsArrived = true end)
 
 	Trigger.AfterDelay(DateTime.Seconds(15), function() ReinforceWithLandingCraft(BazookaReinforcments, SeaEntryB.Location, BeachReinforceB.Location, BeachReinforceB.Location) end)
-	if Map.Difficulty == "Easy" then
+	if Map.LobbyOption("difficulty") == "easy" then
 		Trigger.AfterDelay(DateTime.Seconds(25), function() ReinforceWithLandingCraft(BikeReinforcments, SeaEntryA.Location, BeachReinforceA.Location, BeachReinforceA.Location) end)
 		Trigger.AfterDelay(DateTime.Seconds(30), function() ReinforceWithLandingCraft(BikeReinforcments, SeaEntryB.Location, BeachReinforceB.Location, BeachReinforceB.Location) end)
 	end

@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 using OpenRA.Scripting;
@@ -69,17 +70,5 @@ namespace OpenRA.Mods.Common.Scripting
 
 		[Desc("Create a new WDist by cell distance.")]
 		public WDist FromCells(int numCells) { return WDist.FromCells(numCells); }
-	}
-
-	[ScriptGlobal("WRange")]
-	public class WRangeGlobal : ScriptGlobal
-	{
-		public WRangeGlobal(ScriptContext context) : base(context) { }
-
-		[Desc("Create a new WRange. DEPRECATED! Will be removed.")]
-		public WDist New(int r) { Game.Debug("WRange is deprecated. Use WDist instead."); return new WDist(r); }
-
-		[Desc("Create a new WRange by cell distance. DEPRECATED! Will be removed.")]
-		public WDist FromCells(int numCells) { Game.Debug("WRange is deprecated. Use WDist instead."); return WDist.FromCells(numCells); }
 	}
 }

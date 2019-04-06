@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 ConstructionVehicleReinforcements = { "mcv" }
 ConstructionVehiclePath = { ReinforcementsEntryPoint.Location, DeployPoint.Location }
 
@@ -9,9 +17,11 @@ TruckPath = { TruckEntryPoint.Location, TruckRallyPoint.Location }
 
 PathGuards = { PathGuard1, PathGuard2, PathGuard3, PathGuard4, PathGuard5, PathGuard6, PathGuard7, PathGuard8, PathGuard9, PathGuard10, PathGuard11, PathGuard12, PathGuard13, PathGuard14, PathGuard15 }
 
+SovietBase = { SovietConyard, SovietRefinery, SovietPower1, SovietPower2, SovietSilo, SovietKennel, SovietBarracks, SovietWarfactory }
+
 IdlingUnits = { }
 
-if Map.Difficulty == "Easy" then
+if Map.LobbyOption("difficulty") == "easy" then
 	TimerTicks = DateTime.Minutes(10)
 	Announcements =
 	{
@@ -23,7 +33,7 @@ if Map.Difficulty == "Easy" then
 		{ speech = "WarningOneMinuteRemaining", delay = DateTime.Minutes(9) }
 	}
 
-elseif Map.Difficulty == "Normal" then
+elseif Map.LobbyOption("difficulty") == "normal" then
 	TimerTicks = DateTime.Minutes(5)
 	Announcements =
 	{
@@ -38,7 +48,7 @@ elseif Map.Difficulty == "Normal" then
 	InfantryDelay = DateTime.Seconds(18)
 	AttackGroupSize = 5
 
-elseif Map.Difficulty == "Hard" then
+elseif Map.LobbyOption("difficulty") == "hard" then
 	TimerTicks = DateTime.Minutes(3)
 	Announcements =
 	{
@@ -74,7 +84,18 @@ RunInitialActivities = function()
 	Harvester.FindResources()
 	Trigger.OnKilled(Harvester, function() HarvesterKilled = true end)
 
-	Trigger.OnAllKilled(PathGuards, SendTrucks)
+	Trigger.OnAllKilled(PathGuards, function()
+		player.MarkCompletedObjective(SecureObjective)
+		SendTrucks()
+	end)
+
+	Trigger.OnAllKilled(SovietBase, function()
+		Utils.Do(ussr.GetGroundAttackers(), function(unit)
+			if not Utils.Any(PathGuards, function(pg) return pg == unit end) then
+				Trigger.OnIdle(unit, unit.Hunt)
+			end
+		end)
+	end)
 
 	if InfantryTypes then
 		Trigger.AfterDelay(InfantryDelay, InfantryProduction)
@@ -146,7 +167,7 @@ SendAttack = function()
 	end
 
 	Utils.Do(units, function(unit)
-		if Map.Difficulty ~= "Real tough guy" then
+		if Map.LobbyOption("difficulty") ~= "tough" then
 			unit.AttackMove(DeployPoint.Location)
 		end
 		Trigger.OnIdle(unit, unit.Hunt)
@@ -194,18 +215,17 @@ SendTrucks = function()
 
 		ticked = 0
 		ConvoyObjective = player.AddPrimaryObjective("Escort the convoy.")
-		player.MarkCompletedObjective(SecureObjective)
 
 		Media.PlaySpeechNotification(player, "ConvoyApproaching")
 		Trigger.AfterDelay(DateTime.Seconds(3), function()
 			ConvoyUnharmed = true
-			local trucks = Reinforcements.Reinforce(france, TruckReinforcements, TruckPath, DateTime.Seconds(1),
+			local trucks = Reinforcements.Reinforce(england, TruckReinforcements, TruckPath, DateTime.Seconds(1),
 				function(truck)
 					Trigger.OnIdle(truck, function() truck.Move(TruckExitPoint.Location) end)
 				end)
 			count = 0
 			Trigger.OnEnteredFootprint( { TruckExitPoint.Location }, function(a, id)
-				if a.Owner == france then
+				if a.Owner == england then
 					count = count + 1
 					a.Destroy()
 					if count == 3 then
@@ -239,7 +259,7 @@ end
 
 WorldLoaded = function()
 	player = Player.GetPlayer("Greece")
-	france = Player.GetPlayer("France")
+	england = Player.GetPlayer("England")
 	ussr = Player.GetPlayer("USSR")
 
 	Trigger.OnObjectiveAdded(player, function(p, id)

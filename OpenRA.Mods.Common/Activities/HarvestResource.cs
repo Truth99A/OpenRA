@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -19,24 +20,32 @@ namespace OpenRA.Mods.Common.Activities
 		readonly Harvester harv;
 		readonly HarvesterInfo harvInfo;
 		readonly IFacing facing;
-		readonly ResourceClaimLayer territory;
+		readonly ResourceClaimLayer claimLayer;
 		readonly ResourceLayer resLayer;
+		readonly BodyOrientation body;
 
 		public HarvestResource(Actor self)
 		{
 			harv = self.Trait<Harvester>();
 			harvInfo = self.Info.TraitInfo<HarvesterInfo>();
 			facing = self.Trait<IFacing>();
-			territory = self.World.WorldActor.TraitOrDefault<ResourceClaimLayer>();
+			body = self.Trait<BodyOrientation>();
+			claimLayer = self.World.WorldActor.Trait<ResourceClaimLayer>();
 			resLayer = self.World.WorldActor.Trait<ResourceLayer>();
 		}
 
 		public override Activity Tick(Actor self)
 		{
-			if (IsCanceled)
+			if (ChildActivity != null)
 			{
-				if (territory != null)
-					territory.UnclaimByActor(self);
+				ChildActivity = ActivityUtils.RunActivity(self, ChildActivity);
+				if (ChildActivity != null)
+					return this;
+			}
+
+			if (IsCanceling)
+			{
+				claimLayer.RemoveClaim(self);
 				return NextActivity;
 			}
 
@@ -44,8 +53,7 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (harv.IsFull)
 			{
-				if (territory != null)
-					territory.UnclaimByActor(self);
+				claimLayer.RemoveClaim(self);
 				return NextActivity;
 			}
 
@@ -53,25 +61,28 @@ namespace OpenRA.Mods.Common.Activities
 			if (harvInfo.HarvestFacings != 0)
 			{
 				var current = facing.Facing;
-				var desired = Util.QuantizeFacing(current, harvInfo.HarvestFacings) * (256 / harvInfo.HarvestFacings);
+				var desired = body.QuantizeFacing(current, harvInfo.HarvestFacings);
 				if (desired != current)
-					return Util.SequenceActivities(new Turn(self, desired), this);
+				{
+					QueueChild(self, new Turn(self, desired), true);
+					return this;
+				}
 			}
 
 			var resource = resLayer.Harvest(self.Location);
 			if (resource == null)
 			{
-				if (territory != null)
-					territory.UnclaimByActor(self);
+				claimLayer.RemoveClaim(self);
 				return NextActivity;
 			}
 
-			harv.AcceptResource(resource);
+			harv.AcceptResource(self, resource);
 
 			foreach (var t in self.TraitsImplementing<INotifyHarvesterAction>())
 				t.Harvested(self, resource);
 
-			return Util.SequenceActivities(new Wait(harvInfo.LoadTicksPerBale), this);
+			QueueChild(self, new Wait(harvInfo.BaleLoadDelay), true);
+			return this;
 		}
 	}
 }

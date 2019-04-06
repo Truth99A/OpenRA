@@ -1,16 +1,16 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
-using System.Collections.Generic;
-using System.Drawing;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 using OpenRA.Widgets;
 
@@ -55,7 +55,10 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				switch (viewport.TooltipType)
 				{
 					case WorldTooltipType.Unexplored:
-						labelText = "Unexplored Terrain";
+						labelText = "Unrevealed Terrain";
+						break;
+					case WorldTooltipType.Resource:
+						labelText = viewport.ResourceTooltip.Info.Name;
 						break;
 					case WorldTooltipType.Actor:
 						{
@@ -82,7 +85,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				{
 					foreach (var info in viewport.ActorTooltipExtra)
 					{
-						if (info.IsTooltipVisible(world.LocalPlayer))
+						if (info.IsTooltipVisible(world.RenderPlayer))
 						{
 							if (index != 0)
 								extraText += "\n";
@@ -104,7 +107,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				{
 					flagFaction = o.Faction.InternalName;
 					ownerName = o.PlayerName;
-					ownerColor = o.Color.RGB;
+					ownerColor = o.Color;
 					widget.Bounds.Height = doubleHeight;
 					widget.Bounds.Width = Math.Max(widget.Bounds.Width,
 						owner.Bounds.X + ownerFont.Measure(ownerName).X + label.Bounds.X);

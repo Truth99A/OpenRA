@@ -1,14 +1,16 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System.Linq;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
@@ -24,10 +26,12 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Production queue type to use")]
 		public readonly string Type = null;
 
+		[NotificationReference("Speech")]
 		[Desc("Notification played when production is activated.",
 			"The filename of the audio is defined per faction in notifications.yaml.")]
 		public readonly string ReadyAudio = null;
 
+		[NotificationReference("Speech")]
 		[Desc("Notification played when the exit is jammed.",
 			"The filename of the audio is defined per faction in notifications.yaml.")]
 		public readonly string BlockedAudio = null;
@@ -55,16 +59,34 @@ namespace OpenRA.Mods.Common.Traits
 			base.Activate(self, order, manager);
 
 			var info = Info as ProduceActorPowerInfo;
-			var sp = self.TraitsImplementing<Production>()
-				.FirstOrDefault(p => p.Info.Produces.Contains(info.Type));
+			var producers = self.World.ActorsWithTrait<Production>()
+				.Where(x => x.Actor.Owner == self.Owner
+					&& !x.Trait.IsTraitDisabled
+					&& x.Trait.Info.Produces.Contains(info.Type))
+					.OrderByDescending(x => x.Actor.IsPrimaryBuilding())
+					.ThenByDescending(x => x.Actor.ActorID);
 
 			// TODO: The power should not reset if the production fails.
 			// Fixing this will require a larger rework of the support power code
 			var activated = false;
 
-			if (sp != null)
+			foreach (var p in producers)
+			{
 				foreach (var name in info.Actors)
-					activated |= sp.Produce(self, self.World.Map.Rules.Actors[name], faction);
+				{
+					var ai = self.World.Map.Rules.Actors[name];
+					var inits = new TypeDictionary
+					{
+						new OwnerInit(self.Owner),
+						new FactionInit(BuildableInfo.GetInitialFaction(ai, faction))
+					};
+
+					activated |= p.Trait.Produce(p.Actor, ai, info.Type, inits);
+				}
+
+				if (activated)
+					break;
+			}
 
 			if (activated)
 				Game.Sound.PlayNotification(self.World.Map.Rules, manager.Self.Owner, "Speech", info.ReadyAudio, self.Owner.Faction.InternalName);

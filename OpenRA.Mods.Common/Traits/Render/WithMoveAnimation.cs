@@ -1,54 +1,83 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System.Linq;
 using OpenRA.Traits;
 
-namespace OpenRA.Mods.Common.Traits
+namespace OpenRA.Mods.Common.Traits.Render
 {
-	public class WithMoveAnimationInfo : ITraitInfo, Requires<WithSpriteBodyInfo>, Requires<IMoveInfo>
+	public class WithMoveAnimationInfo : ConditionalTraitInfo, Requires<WithSpriteBodyInfo>, Requires<IMoveInfo>
 	{
 		[Desc("Displayed while moving.")]
 		[SequenceReference] public readonly string MoveSequence = "move";
 
-		public object Create(ActorInitializer init) { return new WithMoveAnimation(init, this); }
+		[Desc("Which sprite body to modify.")]
+		public readonly string Body = "body";
+
+		[Desc("Apply condition on listed movement types. Available options are: None, Horizontal, Vertical, Turn.")]
+		public readonly MovementType ValidMovementTypes = MovementType.Horizontal;
+
+		public override object Create(ActorInitializer init) { return new WithMoveAnimation(init, this); }
+
+		public override void RulesetLoaded(Ruleset rules, ActorInfo ai)
+		{
+			var matches = ai.TraitInfos<WithSpriteBodyInfo>().Count(w => w.Name == Body);
+			if (matches != 1)
+				throw new YamlException("WithMoveAnimation needs exactly one sprite body with matching name.");
+
+			base.RulesetLoaded(rules, ai);
+		}
 	}
 
-	public class WithMoveAnimation : ITick
+	public class WithMoveAnimation : ConditionalTrait<WithMoveAnimationInfo>, INotifyMoving
 	{
-		readonly WithMoveAnimationInfo info;
 		readonly IMove movement;
 		readonly WithSpriteBody wsb;
 
-		WPos cachedPosition;
-
 		public WithMoveAnimation(ActorInitializer init, WithMoveAnimationInfo info)
+			: base(info)
 		{
-			this.info = info;
 			movement = init.Self.Trait<IMove>();
-			wsb = init.Self.Trait<WithSpriteBody>();
-
-			cachedPosition = init.Self.CenterPosition;
+			wsb = init.Self.TraitsImplementing<WithSpriteBody>().Single(w => w.Info.Name == Info.Body);
 		}
 
-		public void Tick(Actor self)
+		void UpdateAnimation(Actor self, MovementType types)
 		{
-			var oldCachedPosition = cachedPosition;
-			cachedPosition = self.CenterPosition;
+			var playAnim = false;
+			if (!IsTraitDisabled && (types & Info.ValidMovementTypes) != 0)
+				playAnim = true;
 
-			// Flying units set IsMoving whenever they are airborne, which isn't enough for our purposes
-			var isMoving = movement.IsMoving && !self.IsDead && (oldCachedPosition - cachedPosition).HorizontalLengthSquared != 0;
-			if (isMoving ^ (wsb.DefaultAnimation.CurrentSequence.Name != info.MoveSequence))
+			if (!playAnim && wsb.DefaultAnimation.CurrentSequence.Name == Info.MoveSequence)
+			{
+				wsb.CancelCustomAnimation(self);
 				return;
+			}
 
-			wsb.DefaultAnimation.ReplaceAnim(isMoving ? info.MoveSequence : wsb.Info.Sequence);
+			if (playAnim && wsb.DefaultAnimation.CurrentSequence.Name != Info.MoveSequence)
+				wsb.PlayCustomAnimationRepeating(self, Info.MoveSequence);
+		}
+
+		void INotifyMoving.MovementTypeChanged(Actor self, MovementType types)
+		{
+			UpdateAnimation(self, types);
+		}
+
+		protected override void TraitEnabled(Actor self)
+		{
+			UpdateAnimation(self, movement.CurrentMovementTypes);
+		}
+
+		protected override void TraitDisabled(Actor self)
+		{
+			UpdateAnimation(self, movement.CurrentMovementTypes);
 		}
 	}
 }

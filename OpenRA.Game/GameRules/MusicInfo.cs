@@ -1,14 +1,16 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using OpenRA.FileFormats;
+using System.IO;
+using OpenRA.FileSystem;
 
 namespace OpenRA.GameRules
 {
@@ -17,6 +19,7 @@ namespace OpenRA.GameRules
 		public readonly string Filename;
 		public readonly string Title;
 		public readonly bool Hidden;
+		public readonly float VolumeModifier = 1f;
 
 		public int Length { get; private set; } // seconds
 		public bool Exists { get; private set; }
@@ -29,22 +32,36 @@ namespace OpenRA.GameRules
 			if (nd.ContainsKey("Hidden"))
 				bool.TryParse(nd["Hidden"].Value, out Hidden);
 
+			if (nd.ContainsKey("VolumeModifier"))
+				VolumeModifier = FieldLoader.GetValue<float>("VolumeModifier", nd["VolumeModifier"].Value);
+
 			var ext = nd.ContainsKey("Extension") ? nd["Extension"].Value : "aud";
 			Filename = (nd.ContainsKey("Filename") ? nd["Filename"].Value : key) + "." + ext;
 		}
 
-		public void Load()
+		public void Load(IReadOnlyFileSystem fileSystem)
 		{
-			if (!Game.ModData.ModFiles.Exists(Filename))
+			Stream stream;
+			if (!fileSystem.TryOpen(Filename, out stream))
 				return;
 
-			Exists = true;
-			using (var s = Game.ModData.ModFiles.Open(Filename))
+			try
 			{
-				if (Filename.ToLowerInvariant().EndsWith("wav"))
-					Length = (int)WavLoader.WaveLength(s);
-				else
-					Length = (int)AudLoader.SoundLength(s);
+				Exists = true;
+				foreach (var loader in Game.ModData.SoundLoaders)
+				{
+					ISoundFormat soundFormat;
+					if (loader.TryParseSound(stream, out soundFormat))
+					{
+						Length = (int)soundFormat.LengthInSeconds;
+						soundFormat.Dispose();
+						break;
+					}
+				}
+			}
+			finally
+			{
+				stream.Dispose();
 			}
 		}
 	}

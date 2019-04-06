@@ -1,8 +1,16 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 AlliedUnits =
 {
 	{ delay = 0, types = { "1tnk", "1tnk", "2tnk", "2tnk" } },
 	{ delay = DateTime.Seconds(3), types = { "e1", "e1", "e1", "e3", "e3" } },
-	{ delay = DateTime.Seconds(7), types = { "e6" } }
+	{ delay = DateTime.Seconds(7), types = { "e6", "e6", "thf" } }
 }
 ReinforceBaseUnits = { "1tnk", "1tnk", "2tnk", "arty", "arty" }
 CivilianEvacuees = { "c1", "c2", "c5", "c7", "c8" }
@@ -15,7 +23,7 @@ SuperTankHuntWaypoints = { SuperTankHuntWaypoint1, SuperTankHuntWaypoint2, Super
 SuperTankHunt = 1
 SuperTankHuntCounter = 1
 ExtractionHeli = "tran"
-ExtractionWaypoint = CPos.New(DemitriLZ.Location.X, 0)
+ExtractionWaypoint = CPos.New(DemitriLZ.Location.X, 19)
 ExtractionLZ = DemitriLZ.Location
 BeachTrigger = { CPos.New(19, 44), CPos.New(20, 44), CPos.New(21, 44), CPos.New(22, 44), CPos.New(22, 45), CPos.New(23, 45), CPos.New(22, 44), CPos.New(24, 45), CPos.New(24, 46), CPos.New(24, 47), CPos.New(25, 47), CPos.New(25, 48) }
 DemitriAreaTrigger = { CPos.New(32, 98), CPos.New(32, 99), CPos.New(33, 99), CPos.New(33, 100), CPos.New(33, 101), CPos.New(33, 102), CPos.New(32, 102), CPos.New(32, 103) }
@@ -65,8 +73,12 @@ SetupAlliedBase = function()
 	DefendOutpost = player.AddSecondaryObjective("Defend and repair our outpost.")
 	player.MarkCompletedObjective(FindOutpost)
 
-	Trigger.AfterDelay(DateTime.Seconds(1), function() -- don't fail the Objective instantly
-		Trigger.OnAllRemovedFromWorld(alliedOutpost, function() player.MarkFailedObjective(DefendOutpost) end)
+	-- Don't fail the Objective instantly
+	Trigger.AfterDelay(DateTime.Seconds(1), function()
+
+		-- The actor might have been destroyed/crushed in this one second delay
+		local actors = Utils.Where(alliedOutpost, function(actor) return actor.IsInWorld end)
+		Trigger.OnAllRemovedFromWorld(actors, function() player.MarkFailedObjective(DefendOutpost) end)
 	end)
 
 	Trigger.AfterDelay(DateTime.Minutes(1) + DateTime.Seconds(40), function()
@@ -103,20 +115,32 @@ SendAlliedUnits = function()
 	Media.PlaySpeechNotification(player, "ReinforcementsArrived")
 	Utils.Do(AlliedUnits, function(table)
 		Trigger.AfterDelay(table.delay, function()
-			Reinforcements.Reinforce(player, table.types, { StartEntryPoint.Location, StartMovePoint.Location }, 18)
+			local units = Reinforcements.Reinforce(player, table.types, { StartEntryPoint.Location, StartMovePoint.Location }, 18)
+
+			Utils.Do(units, function(unit)
+				if unit.Type == "e6" then
+					Engineer = unit
+					Trigger.OnKilled(unit, LandingPossible)
+				end
+			end)
 		end)
 	end)
 
 	Trigger.AfterDelay(DateTime.Seconds(1), function() InitialUnitsArrived = true end)
 end
 
-SuperTankDomeInfiltrated = function()
-	turkey.SetStance(player, "Ally")
-	turkey.SetStance(neutral, "Ally")
+LandingPossible = function()
+	if not beachReached and (USSRSpen.IsDead or Engineer.IsDead) and LstProduced < 1 then
+		player.MarkFailedObjective(CrossRiver)
+	end
+end
 
+SuperTankDomeInfiltrated = function()
 	SuperTankAttack = true
 	Utils.Do(SuperTanks, function(tnk)
+		tnk.Owner = friendlyMadTanks
 		if not tnk.IsDead then
+			tnk.GrantCondition("friendly")
 			Trigger.ClearAll(tnk)
 			tnk.Stop()
 			if tnk.Location.Y > 61 then
@@ -157,9 +181,7 @@ SuperTankDomeInfiltrated = function()
 end
 
 SuperTanksDestruction = function()
-	local badGuys = Map.ActorsInBox(Map.TopLeft, Map.BottomRight,
-		function(self) return self.Owner == badguy and self.HasProperty("Health") end)
-
+	local badGuys = Utils.Where(Map.ActorsInWorld, function(self) return self.Owner == badguy and self.HasProperty("Health") end)
 	Utils.Do(badGuys, function(unit)
 		unit.Kill()
 	end)
@@ -204,8 +226,8 @@ CreateDemitri = function()
 	end)
 	Trigger.OnRemovedFromWorld(demitri, function()
 		if not demitriChinook.IsDead and demitriChinook.HasPassengers then
-			demitriChinook.Move(ExtractionWaypoint)
-			Trigger.OnIdle(demitriChinook, demitriChinook.Destroy)
+			demitriChinook.Move(ExtractionWaypoint + CVec.New(0, -1))
+			demitriChinook.Destroy()
 			demitriLZFlare.Destroy()
 		end
 	end)
@@ -263,13 +285,10 @@ InitPlayers = function()
 	ussr = Player.GetPlayer("USSR")
 	ukraine = Player.GetPlayer("Ukraine")
 	turkey = Player.GetPlayer("Turkey")
+	friendlyMadTanks = Player.GetPlayer("FriendlyMadTanks")
 
-	player.Cash = 0
 	ussr.Cash = 2000
 	Trigger.AfterDelay(0, function() badguy.Resources = badguy.ResourceCapacity * 0.75 end)
-	Trigger.OnCapture(USSROutpostSilo, function() -- getting money through capturing doesn't work
-		player.Cash = player.Cash + Utils.RandomInteger(1200, 1300)
-	end)
 end
 
 InitObjectives = function()
@@ -278,7 +297,7 @@ InitObjectives = function()
 	end)
 
 	EliminateSuperTanks = player.AddPrimaryObjective("Eliminate these super tanks.")
-	CrossRiver = player.AddPrimaryObjective("Find a way to transport your forces to the mainland.")
+	CrossRiver = player.AddPrimaryObjective("Secure transport to the mainland.")
 	FindOutpost = player.AddPrimaryObjective("Find our outpost and start repairs on it.")
 	RescueCivilians = player.AddSecondaryObjective("Evacuate all civilians from the hospital.")
 	BadGuyObj = badguy.AddPrimaryObjective("Deny the destruction of the super tanks.")
@@ -398,6 +417,19 @@ InitTriggers = function()
 				if TestCamera.IsInWorld then TestCamera.Destroy() end
 				Trigger.RemoveProximityTrigger(id)
 			end
+		end
+	end)
+
+	LstProduced = 0
+	Trigger.OnKilled(USSRSpen, LandingPossible)
+	Trigger.OnSold(USSRSpen, LandingPossible)
+	Trigger.OnProduction(USSRSpen, function(self, produced)
+		if produced.Type == "lst" then
+			LstProduced = LstProduced + 1
+			Trigger.OnKilled(produced, function()
+				LstProduced = LstProduced - 1
+				LandingPossible()
+			end)
 		end
 	end)
 end

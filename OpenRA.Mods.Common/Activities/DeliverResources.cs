@@ -1,61 +1,64 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System.Drawing;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Activities
 {
 	public class DeliverResources : Activity
 	{
-		const int NextChooseTime = 100;
-
 		readonly IMove movement;
 		readonly Harvester harv;
+		readonly Actor targetActor;
 
 		bool isDocking;
-		int chosenTicks;
 
-		public DeliverResources(Actor self)
+		public DeliverResources(Actor self, Actor targetActor = null)
 		{
 			movement = self.Trait<IMove>();
 			harv = self.Trait<Harvester>();
+			this.targetActor = targetActor;
+		}
+
+		protected override void OnFirstRun(Actor self)
+		{
+			if (targetActor != null && targetActor.IsInWorld)
+				harv.LinkProc(self, targetActor);
 		}
 
 		public override Activity Tick(Actor self)
 		{
-			if (NextActivity != null)
+			if (ChildActivity != null)
+			{
+				ChildActivity = ActivityUtils.RunActivity(self, ChildActivity);
+				if (ChildActivity != null)
+					return this;
+			}
+
+			if (IsCanceling || isDocking)
 				return NextActivity;
 
 			// Find the nearest best refinery if not explicitly ordered to a specific refinery:
-			if (harv.OwnerLinkedProc == null || !harv.OwnerLinkedProc.IsInWorld)
-			{
-				// Maybe we lost the owner-linked refinery:
-				harv.OwnerLinkedProc = null;
-				if (self.World.WorldTick - chosenTicks > NextChooseTime)
-				{
-					harv.ChooseNewProc(self, null);
-					chosenTicks = self.World.WorldTick;
-				}
-			}
-			else
-				harv.LinkProc(self, harv.OwnerLinkedProc);
-
 			if (harv.LinkedProc == null || !harv.LinkedProc.IsInWorld)
 				harv.ChooseNewProc(self, null);
 
 			// No refineries exist; check again after delay defined in Harvester.
 			if (harv.LinkedProc == null)
-				return Util.SequenceActivities(new Wait(harv.Info.SearchForDeliveryBuildingDelay), this);
+			{
+				QueueChild(self, new Wait(harv.Info.SearchForDeliveryBuildingDelay), true);
+				return this;
+			}
 
 			var proc = harv.LinkedProc;
 			var iao = proc.Trait<IAcceptResources>();
@@ -63,24 +66,22 @@ namespace OpenRA.Mods.Common.Activities
 			self.SetTargetLine(Target.FromActor(proc), Color.Green, false);
 			if (self.Location != proc.Location + iao.DeliveryOffset)
 			{
-				var notify = self.TraitsImplementing<INotifyHarvesterAction>();
-				var next = new DeliverResources(self);
-				foreach (var n in notify)
-					n.MovingToRefinery(self, proc.Location + iao.DeliveryOffset, next);
+				foreach (var n in self.TraitsImplementing<INotifyHarvesterAction>())
+					n.MovingToRefinery(self, proc, new FindAndDeliverResources(self));
 
-				return Util.SequenceActivities(movement.MoveTo(proc.Location + iao.DeliveryOffset, 0), this);
+				QueueChild(self, movement.MoveTo(proc.Location + iao.DeliveryOffset, 0), true);
+				return this;
 			}
 
 			if (!isDocking)
 			{
+				QueueChild(self, new Wait(10), true);
 				isDocking = true;
 				iao.OnDock(self, this);
+				return this;
 			}
 
-			return Util.SequenceActivities(new Wait(10), this);
+			return NextActivity;
 		}
-
-		// Cannot be cancelled
-		public override void Cancel(Actor self) { }
 	}
 }

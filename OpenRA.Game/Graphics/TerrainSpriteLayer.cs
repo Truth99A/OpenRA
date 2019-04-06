@@ -1,19 +1,18 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
-using System.Linq;
-using OpenRA.Traits;
+using OpenRA.Primitives;
 
 namespace OpenRA.Graphics
 {
@@ -44,10 +43,10 @@ namespace OpenRA.Graphics
 			this.palette = palette;
 
 			map = world.Map;
-			rowStride = 4 * map.MapSize.X;
+			rowStride = 6 * map.MapSize.X;
 
 			vertices = new Vertex[rowStride * map.MapSize.Y];
-			vertexBuffer = Game.Renderer.Device.CreateVertexBuffer(vertices.Length);
+			vertexBuffer = Game.Renderer.Context.CreateVertexBuffer(vertices.Length);
 			emptySprite = new Sprite(sheet, Rectangle.Empty, TextureChannel.Alpha);
 
 			wr.PaletteInvalidated += UpdatePaletteIndices;
@@ -60,7 +59,7 @@ namespace OpenRA.Graphics
 			for (var i = 0; i < vertices.Length; i++)
 			{
 				var v = vertices[i];
-				vertices[i] = new Vertex(v.X, v.Y, v.Z, v.U, v.V, palette.TextureIndex, v.C);
+				vertices[i] = new Vertex(v.X, v.Y, v.Z, v.S, v.T, v.U, v.V, palette.TextureIndex, v.C);
 			}
 
 			for (var row = 0; row < map.MapSize.Y; row++)
@@ -69,12 +68,13 @@ namespace OpenRA.Graphics
 
 		public void Update(CPos cell, Sprite sprite)
 		{
-			var pos = sprite == null ? float2.Zero :
-				worldRenderer.ScreenPosition(map.CenterOfCell(cell)) + sprite.Offset - 0.5f * sprite.Size;
-			Update(cell.ToMPos(map.Grid.Type), sprite, pos);
+			var xyz = sprite == null ? float3.Zero :
+				worldRenderer.Screen3DPosition(map.CenterOfCell(cell)) + sprite.Offset - 0.5f * sprite.Size;
+
+			Update(cell.ToMPos(map.Grid.Type), sprite, xyz);
 		}
 
-		public void Update(MPos uv, Sprite sprite, float2 pos)
+		public void Update(MPos uv, Sprite sprite, float3 pos)
 		{
 			if (sprite != null)
 			{
@@ -87,8 +87,12 @@ namespace OpenRA.Graphics
 			else
 				sprite = emptySprite;
 
-			var offset = rowStride * uv.V + 4 * uv.U;
-			Util.FastCreateQuad(vertices, pos, sprite, palette.TextureIndex, offset, sprite.Size);
+			// The vertex buffer does not have geometry for cells outside the map
+			if (!map.Tiles.Contains(uv))
+				return;
+
+			var offset = rowStride * uv.V + 6 * uv.U;
+			Util.FastCreateQuad(vertices, pos, sprite, int2.Zero, palette.TextureIndex, offset, sprite.Size);
 
 			dirtyRows.Add(uv.V);
 		}
@@ -123,7 +127,7 @@ namespace OpenRA.Graphics
 
 			Game.Renderer.WorldSpriteRenderer.DrawVertexBuffer(
 				vertexBuffer, rowStride * firstRow, rowStride * (lastRow - firstRow),
-				PrimitiveType.QuadList, Sheet, BlendMode);
+				PrimitiveType.TriangleList, Sheet, BlendMode);
 
 			Game.Renderer.Flush();
 		}

@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -22,7 +23,7 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly WDist DropRange = WDist.FromCells(4);
 
 		[Desc("Sound to play when dropping.")]
-		public readonly string ChuteSound = "chute1.aud";
+		public readonly string ChuteSound = null;
 
 		public object Create(ActorInitializer init) { return new ParaDrop(init.Self, this); }
 	}
@@ -57,7 +58,7 @@ namespace OpenRA.Mods.Common.Traits
 			checkForSuitableCell = checkLandingCell;
 		}
 
-		public void Tick(Actor self)
+		void ITick.Tick(Actor self)
 		{
 			var wasInDropRange = inDropRange;
 			inDropRange = target.IsInRange(self.CenterPosition, info.DropRange);
@@ -87,7 +88,7 @@ namespace OpenRA.Mods.Common.Traits
 				w.Add(a);
 				a.QueueActivity(new Parachute(a, self.CenterPosition));
 			});
-			Game.Sound.Play(info.ChuteSound, self.CenterPosition);
+			Game.Sound.Play(SoundType.World, info.ChuteSound, self.CenterPosition);
 		}
 
 		static bool IsSuitableCell(Actor actorToDrop, CPos p)
@@ -95,7 +96,7 @@ namespace OpenRA.Mods.Common.Traits
 			return actorToDrop.Trait<IPositionable>().CanEnterCell(p);
 		}
 
-		public void RemovedFromWorld(Actor self)
+		void INotifyRemovedFromWorld.RemovedFromWorld(Actor self)
 		{
 			OnRemovedFromWorld(self);
 		}

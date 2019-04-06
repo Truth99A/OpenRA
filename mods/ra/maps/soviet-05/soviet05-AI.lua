@@ -1,7 +1,15 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 IdleHunt = function(unit) if not unit.IsDead then Trigger.OnIdle(unit, unit.Hunt) end end
 
 IdlingUnits = function()
-	local lazyUnits = Map.ActorsInBox(NWIdlePoint.CenterPosition, Map.BottomRight, function(actor)
+	local lazyUnits = Utils.Where(Map.ActorsInWorld, function(actor)
 		return actor.HasProperty("Hunt") and (actor.Owner == GoodGuy or actor.Owner == Greece) end)
 
 	Utils.Do(lazyUnits, function(unit)
@@ -12,7 +20,8 @@ IdlingUnits = function()
 	end)
 end
 
-BaseBuildings = {
+BaseBuildings =
+{
 	{ type = "powr", pos = CVec.New(3, -2), cost = 300 },
 	{ type = "tent", pos = CVec.New(0, 4), cost = 400 },
 	{ type = "hbox", pos = CVec.New(3, 6), cost = 600 },
@@ -90,7 +99,7 @@ ProduceInfantry = function()
 end
 
 ProduceShips = function()
-	if Shipyard.IsDead then
+	if Navalyard.IsDead then
 		return
 	end
 

@@ -12,20 +12,43 @@ CRATE:
 		UseCashTick: yes
 	RevealMapCrateAction:
 		SelectionShares: 1
-		Effect: reveal-map
+		Sequence: reveal-map
 	ExplodeCrateAction@fire:
 		Weapon: Napalm.Crate
 		SelectionShares: 5
-	GrantUpgradeCrateAction@cloak:
+	GrantExternalConditionCrateAction@cloak:
 		SelectionShares: 5
-		Effect: cloak
-		Upgrades: cloak
+		Sequence: cloak
+		Condition: cloak-crate-collected
 	GiveMcvCrateAction:
 		SelectionShares: 0
-		NoBaseSelectionShares: 120
+		NoBaseSelectionShares: 50
 		Units: mcv
+	ExplodeCrateAction:
+		Weapon: Atomic
+		SelectionShares: 1
+	GiveUnitCrateAction:
+		Units: vice
+		Owner: Creeps
+		SelectionShares: 10
+	LevelUpCrateAction:
+		Levels: 4
+		SelectionShares: 12
+
+WCRATE:
+	Inherits: ^Crate
+	Tooltip:
+		Name: Wooden Crate
+
+SCRATE:
+	Inherits: ^Crate
+	Tooltip:
+		Name: Steel Crate
 
 mpspawn:
+	Interactable:
+	EditorOnlyTooltip:
+		Name: (multiplayer player starting point)
 	AlwaysVisible:
 	Immobile:
 		OccupiesSpace: false
@@ -33,8 +56,15 @@ mpspawn:
 	RenderSpritesEditorOnly:
 	BodyOrientation:
 		QuantizedFacings: 1
+	MapEditorData:
+		Categories: System
+	RequiresSpecificOwners:
+		ValidOwnerNames: Neutral
 
 waypoint:
+	Interactable:
+	EditorOnlyTooltip:
+		Name: (waypoint for scripted behavior)
 	AlwaysVisible:
 	Immobile:
 		OccupiesSpace: false
@@ -42,14 +72,21 @@ waypoint:
 	RenderSpritesEditorOnly:
 	BodyOrientation:
 		QuantizedFacings: 1
+	MapEditorData:
+		Categories: System
 
-^fact.colorpicker:
+fact.colorpicker:
 	Inherits: FACT
+	-Buildable:
+	-MapEditorData:
 	RenderSprites:
 		Image: fact
 		Palette: colorpicker
 
 CAMERA:
+	Interactable:
+	EditorOnlyTooltip:
+		Name: (reveals area to owner)
 	AlwaysVisible:
 	WithSpriteBody:
 	RenderSpritesEditorOnly:
@@ -57,13 +94,16 @@ CAMERA:
 		QuantizedFacings: 1
 	Immobile:
 		OccupiesSpace: false
-	Health:
-		HP: 1000
 	RevealsShroud:
 		Range: 10c0
 		Type: CenterPosition
+	MapEditorData:
+		Categories: System
 
 CAMERA.small:
+	Interactable:
+	EditorOnlyTooltip:
+		Name: (reveals small area to owner)
 	AlwaysVisible:
 	WithSpriteBody:
 	RenderSpritesEditorOnly:
@@ -73,10 +113,13 @@ CAMERA.small:
 	Immobile:
 		OccupiesSpace: false
 	Health:
-		HP: 1000
+		HP: 100000
+	HitShape:
 	RevealsShroud:
 		Range: 6c0
 		Type: CenterPosition
+	MapEditorData:
+		Categories: System
 
 FLARE:
 	Immobile:
@@ -86,12 +129,16 @@ FLARE:
 		Type: CenterPosition
 	RenderSprites:
 		Image: smokland
+		Palette: terrain
 	WithSpriteBody:
 		StartSequence: open
 	HiddenUnderFog:
 		Type: CenterPosition
 	Tooltip:
 		Name: Flare
+		ShowOwnerRow: false
 	BodyOrientation:
 		QuantizedFacings: 1
-
+	MapEditorData:
+		Categories: System
+	Interactable:

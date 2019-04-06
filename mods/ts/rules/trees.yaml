@@ -15,9 +15,14 @@ BIGBLUE:
 		Palette: bluetiberium
 	RadarColorFromTerrain:
 		Terrain: BlueTiberium
+	AppearsOnMapPreview:
+		Terrain: BlueTiberium
 	SeedsResource:
 		ResourceType: BlueTiberium
-		Interval: 100
+		Interval: 1000
+
+BIGBLUE3:
+	Inherits: BIGBLUE
 
 TREE01:
 	Inherits: ^Tree
@@ -98,6 +103,8 @@ VEINHOLEDUMMY:
 	HiddenUnderShroud:
 	RadarColorFromTerrain:
 		Terrain: Veins
+	AppearsOnMapPreview:
+		Terrain: Veins
 	Building:
 		Footprint: xx xx
 		Dimensions: 2, 2
@@ -112,5 +119,56 @@ VEINHOLE:
 	RenderSprites:
 		Palette: player
 	WithSpriteBody:
-	AutoSelectionSize:
+	MapEditorData:
+		Categories: Resource spawn
+	Interactable:
 
+^TibFlora:
+	Inherits: ^Tree
+	Tooltip:
+		Name: Tiberian Flora
+
+FONA01:
+	Inherits: ^TibFlora
+
+FONA02:
+	Inherits: ^TibFlora
+
+FONA03:
+	Inherits: ^TibFlora
+
+FONA04:
+	Inherits: ^TibFlora
+
+FONA05:
+	Inherits: ^TibFlora
+
+FONA06:
+	Inherits: ^TibFlora
+
+FONA07:
+	Inherits: ^TibFlora
+
+FONA08:
+	Inherits: ^TibFlora
+
+FONA09:
+	Inherits: ^TibFlora
+
+FONA10:
+	Inherits: ^TibFlora
+
+FONA11:
+	Inherits: ^TibFlora
+
+FONA12:
+	Inherits: ^TibFlora
+
+FONA13:
+	Inherits: ^TibFlora
+
+FONA14:
+	Inherits: ^TibFlora
+
+FONA15:
+	Inherits: ^TibFlora

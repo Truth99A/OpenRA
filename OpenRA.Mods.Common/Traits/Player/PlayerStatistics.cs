@@ -1,15 +1,15 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System.Collections.Generic;
-using System.Linq;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
@@ -20,10 +20,10 @@ namespace OpenRA.Mods.Common.Traits
 		public object Create(ActorInitializer init) { return new PlayerStatistics(init.Self); }
 	}
 
-	public class PlayerStatistics : ITick, IResolveOrder
+	public class PlayerStatistics : ITick, IResolveOrder, INotifyCreated
 	{
-		World world;
-		Player player;
+		PlayerResources resources;
+		PlayerExperience experience;
 
 		public int OrderCount;
 
@@ -31,12 +31,22 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			get
 			{
-				return player.PlayerActor.Trait<PlayerResources>().Earned - earnedAtBeginningOfMinute;
+				return resources != null ? resources.Earned - earnedAtBeginningOfMinute : 0;
+			}
+		}
+
+		public int Experience
+		{
+			get
+			{
+				return experience != null ? experience.Experience : 0;
 			}
 		}
 
 		public Queue<int> EarnedSamples = new Queue<int>(100);
 		int earnedAtBeginningOfMinute;
+
+		public Queue<int> ArmySamples = new Queue<int>(100);
 
 		public int KillsCost;
 		public int DeathsCost;
@@ -47,24 +57,38 @@ namespace OpenRA.Mods.Common.Traits
 		public int BuildingsKilled;
 		public int BuildingsDead;
 
-		public PlayerStatistics(Actor self)
+		public int ArmyValue;
+
+		public PlayerStatistics(Actor self) { }
+
+		void INotifyCreated.Created(Actor self)
 		{
-			world = self.World;
-			player = self.Owner;
+			resources = self.TraitOrDefault<PlayerResources>();
+			experience = self.TraitOrDefault<PlayerExperience>();
 		}
 
 		void UpdateEarnedThisMinute()
 		{
 			EarnedSamples.Enqueue(EarnedThisMinute);
-			earnedAtBeginningOfMinute = player.PlayerActor.Trait<PlayerResources>().Earned;
+			earnedAtBeginningOfMinute = resources != null ? resources.Earned : 0;
 			if (EarnedSamples.Count > 100)
 				EarnedSamples.Dequeue();
 		}
 
-		public void Tick(Actor self)
+		void UpdateArmyThisMinute()
 		{
-			if (world.WorldTick % 1500 == 1)
+			ArmySamples.Enqueue(ArmyValue);
+			if (ArmySamples.Count > 100)
+				ArmySamples.Dequeue();
+		}
+
+		void ITick.Tick(Actor self)
+		{
+			if (self.World.WorldTick % 1500 == 1)
+			{
 				UpdateEarnedThisMinute();
+				UpdateArmyThisMinute();
+			}
 		}
 
 		public void ResolveOrder(Actor self, Order order)
@@ -96,11 +120,30 @@ namespace OpenRA.Mods.Common.Traits
 	}
 
 	[Desc("Attach this to a unit to update observer stats.")]
-	public class UpdatesPlayerStatisticsInfo : TraitInfo<UpdatesPlayerStatistics> { }
-
-	public class UpdatesPlayerStatistics : INotifyKilled
+	public class UpdatesPlayerStatisticsInfo : ITraitInfo
 	{
-		public void Killed(Actor self, AttackInfo e)
+		[Desc("Add to army value in statistics")]
+		public bool AddToArmyValue = false;
+
+		public object Create(ActorInitializer init) { return new UpdatesPlayerStatistics(this, init.Self); }
+	}
+
+	public class UpdatesPlayerStatistics : INotifyKilled, INotifyCreated, INotifyOwnerChanged, INotifyActorDisposing
+	{
+		UpdatesPlayerStatisticsInfo info;
+		PlayerStatistics playerStats;
+		int cost = 0;
+		bool includedInArmyValue = false;
+
+		public UpdatesPlayerStatistics(UpdatesPlayerStatisticsInfo info, Actor self)
+		{
+			this.info = info;
+			if (self.Info.HasTraitInfo<ValuedInfo>())
+				cost = self.Info.TraitInfo<ValuedInfo>().Cost;
+			playerStats = self.Owner.PlayerActor.Trait<PlayerStatistics>();
+		}
+
+		void INotifyKilled.Killed(Actor self, AttackInfo e)
 		{
 			if (self.Owner.WinState != WinState.Undefined)
 				return;
@@ -118,11 +161,40 @@ namespace OpenRA.Mods.Common.Traits
 				defenderStats.UnitsDead++;
 			}
 
-			if (self.Info.HasTraitInfo<ValuedInfo>())
+			attackerStats.KillsCost += cost;
+			defenderStats.DeathsCost += cost;
+			if (includedInArmyValue)
 			{
-				var cost = self.Info.TraitInfo<ValuedInfo>().Cost;
-				attackerStats.KillsCost += cost;
-				defenderStats.DeathsCost += cost;
+				defenderStats.ArmyValue -= cost;
+				includedInArmyValue = false;
+			}
+		}
+
+		void INotifyCreated.Created(Actor self)
+		{
+			includedInArmyValue = info.AddToArmyValue;
+			if (includedInArmyValue)
+				playerStats.ArmyValue += cost;
+		}
+
+		void INotifyOwnerChanged.OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)
+		{
+			var newOwnerStats = newOwner.PlayerActor.Trait<PlayerStatistics>();
+			if (includedInArmyValue)
+			{
+				playerStats.ArmyValue -= cost;
+				newOwnerStats.ArmyValue += cost;
+			}
+
+			playerStats = newOwnerStats;
+		}
+
+		void INotifyActorDisposing.Disposing(Actor self)
+		{
+			if (includedInArmyValue)
+			{
+				playerStats.ArmyValue -= cost;
+				includedInArmyValue = false;
 			}
 		}
 	}

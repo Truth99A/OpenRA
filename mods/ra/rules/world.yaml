@@ -7,7 +7,89 @@
 		VictoryMusic: score
 		DefeatMusic: map
 	TerrainGeometryOverlay:
-	LoadWidgetAtGameStart:
+	DebugVisualizations:
+	Locomotor@FOOT:
+		Name: foot
+		Crushes: mine, crate
+		SharesCell: true
+		TerrainSpeeds:
+			Clear: 90
+			Rough: 80
+			Road: 100
+			Bridge: 100
+			Ore: 80
+			Gems: 80
+			Beach: 80
+	Locomotor@WHEELED:
+		Name: wheeled
+		Crushes: mine, crate
+		TerrainSpeeds:
+			Clear: 80
+			Rough: 40
+			Road: 100
+			Bridge: 100
+			Ore: 70
+			Gems: 70
+			Beach: 40
+	Locomotor@HEAVYWHEELED:
+		Name: heavywheeled
+		Crushes: wall, mine, crate, infantry
+		TerrainSpeeds:
+			Clear: 80
+			Rough: 40
+			Road: 100
+			Bridge: 100
+			Ore: 70
+			Gems: 70
+			Beach: 40
+	Locomotor@LIGHTTRACKED:
+		Name: lighttracked
+		Crushes: wall, mine, crate
+		TerrainSpeeds:
+			Clear: 80
+			Rough: 70
+			Road: 100
+			Bridge: 100
+			Ore: 70
+			Gems: 70
+			Beach: 70
+	Locomotor@TRACKED:
+		Name: tracked
+		Crushes: wall, infantry, mine, crate
+		TerrainSpeeds:
+			Clear: 80
+			Rough: 70
+			Road: 100
+			Bridge: 100
+			Ore: 70
+			Gems: 70
+			Beach: 70
+	Locomotor@HEAVYTRACKED:
+		Name: heavytracked
+		Crushes: wall, infantry, mine, crate, heavywall
+		TerrainSpeeds:
+			Clear: 80
+			Rough: 70
+			Road: 100
+			Bridge: 100
+			Ore: 70
+			Gems: 70
+			Beach: 70
+	Locomotor@NAVAL:
+		Name: naval
+		Crushes: crate
+		TerrainSpeeds:
+			Water: 100
+	Locomotor@LANDINGCRAFT:
+		Name: lcraft
+		Crushes: crate
+		TerrainSpeeds:
+			Water: 100
+			Beach: 70
+	Locomotor@IMMOBILE:
+		Name: immobile
+		TerrainSpeeds:
+	TerrainRenderer:
 	ShroudRenderer:
 		FogVariants: shroud
 		Index: 255, 16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240, 20, 40, 56, 65, 97, 130, 148, 194, 24, 33, 66, 132, 28, 41, 67, 134, 1, 2, 4, 8, 3, 6, 12, 9, 7, 14, 13, 11, 5, 10, 15, 255
@@ -21,12 +103,12 @@
 		Name: England
 		InternalName: england
 		Side: Allies
-		Description: England: Espionage\nSpecial Unit: British Spy\nSpecial Unit: Phase Transport
+		Description: England: Counterintelligence\nSpecial Unit: British Spy\nSpecial Unit: Mobile Gap Generator
 	Faction@2:
 		Name: France
 		InternalName: france
 		Side: Allies
-		Description: France: Deception\nSpecial Ability: Can build fake structures\nSpecial Unit: Mobile Gap Generator
+		Description: France: Deception\nSpecial Ability: Can build fake structures\nSpecial Unit: Phase Transport
 	Faction@3:
 		Name: Germany
 		InternalName: germany
@@ -52,54 +134,58 @@
 		InternalName: Random
 		RandomFactionMembers: RandomAllies, RandomSoviet
 		Side: Random
-		Description: A random country.
+		Description: Random Country\nA random country will be chosen when the game starts.
 	Faction@randomallies:
 		Name: Allies
 		InternalName: RandomAllies
 		RandomFactionMembers: england, france, germany
 		Side: Random
-		Description: A random Allied country.
+		Description: Random Allied Country\nA random Allied country will be chosen when the game starts.
 	Faction@randomsoviet:
 		Name: Soviet
 		InternalName: RandomSoviet
 		RandomFactionMembers: russia, ukraine
 		Side: Random
-		Description: A random Soviet country.
+		Description: Random Soviet Country\nA random Soviet country will be chosen when the game starts.
 	ResourceType@ore:
+		Type: Ore
+		Name: Valuable Minerals
+		PipColor: Yellow
 		ResourceType: 1
+		TerrainType: Ore
 		Palette: player
-		Variants: gold01,gold02,gold03,gold04
+		Sequences: gold01,gold02,gold03,gold04
 		MaxDensity: 12
 		ValuePerUnit: 25
-		Name: Ore
-		PipColor: Yellow
 		AllowedTerrainTypes: Clear,Road
 		AllowUnderActors: true
-		TerrainType: Ore
 	ResourceType@gem:
+		Type: Gems
+		Name: Valuable Minerals
+		PipColor: Red
 		ResourceType: 2
+		TerrainType: Gems
 		Palette: player
-		Variants: gem01,gem02,gem03,gem04
+		Sequences: gem01,gem02,gem03,gem04
 		MaxDensity: 3
 		ValuePerUnit: 50
-		Name: Gems
-		PipColor: Red
 		AllowedTerrainTypes: Clear,Road
 		AllowUnderActors: true
-		TerrainType: Gems
 
 World:
 	Inherits: ^BaseWorld
 	ChatCommands:
 	DevCommands:
+	DebugVisualizationCommands:
 	PlayerCommands:
 	HelpCommand:
 	ScreenShaker:
 	BuildingInfluence:
 	ProductionQueueFromSelection:
 		ProductionPaletteWidget: PRODUCTION_PALETTE
-	BridgeLayer:
-		Bridges: bridge1, bridge2, br1, br2, br3, sbridge1, sbridge2, sbridge3, sbridge4
+	LegacyBridgeLayer:
+		Bridges: bridge1, bridge2, bridge3, bridge4, br1, br2, br3, sbridge1, sbridge2, sbridge3, sbridge4
+	CustomTerrainDebugOverlay:
 	CrateSpawner:
 		DeliveryAircraft: badr
 		QuantizedFacings: 16
@@ -108,6 +194,7 @@ World:
 		SpawnInterval: 3000
 		WaterChance: 20
 		InitialSpawnDelay: 1500
+		CheckboxDisplayOrder: 1
 	DomainIndex:
 	SmudgeLayer@SCORCH:
 		Type: Scorch
@@ -118,9 +205,15 @@ World:
 		Sequence: craters
 	ResourceLayer:
 	ResourceClaimLayer:
-	PathfinderDebugOverlay:
 	WarheadDebugOverlay:
 	SpawnMapActors:
+	MapBuildRadius:
+		AllyBuildRadiusCheckboxDisplayOrder: 4
+		BuildRadiusCheckboxDisplayOrder: 5
+	MapOptions:
+		ShortGameCheckboxDisplayOrder: 2
+		TechLevelDropdownDisplayOrder: 2
+		GameSpeedDropdownDisplayOrder: 3
 	CreateMPPlayers:
 	MPStartUnits@mcvonly:
 		Class: none
@@ -160,7 +253,9 @@ World:
 		InnerSupportRadius: 3
 		OuterSupportRadius: 5
 	MPStartLocations:
+		SeparateTeamSpawnsCheckboxDisplayOrder: 6
 	SpawnMPUnits:
+		DropdownDisplayOrder: 1
 	PathFinder:
 	ValidateOrder:
 	DebugPauseState:
@@ -168,10 +263,12 @@ World:
 	StartGameNotification:
 	ObjectivesPanel:
 		PanelName: SKIRMISH_STATS
+	LoadWidgetAtGameStart:
+	ScriptTriggers:
 
 EditorWorld:
 	Inherits: ^BaseWorld
 	EditorActorLayer:
 	EditorResourceLayer:
 	EditorSelectionLayer:
-
+	LoadWidgetAtGameStart:

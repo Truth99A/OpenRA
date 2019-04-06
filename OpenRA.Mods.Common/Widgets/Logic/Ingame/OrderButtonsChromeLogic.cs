@@ -1,18 +1,15 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System;
-using System.Linq;
 using OpenRA.Mods.Common.Orders;
-using OpenRA.Mods.Common.Traits;
-using OpenRA.Mods.Common.Widgets;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets.Logic
@@ -24,10 +21,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		{
 			var sell = widget as ButtonWidget;
 			if (sell != null)
-			{
-				sell.GetKey = _ => Game.Settings.Keys.SellKey;
 				OrderButtonsChromeUtils.BindOrderButton<SellOrderGenerator>(world, sell, "sell");
-			}
 		}
 	}
 
@@ -38,10 +32,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		{
 			var repair = widget as ButtonWidget;
 			if (repair != null)
-			{
-				repair.GetKey = _ => Game.Settings.Keys.RepairKey;
 				OrderButtonsChromeUtils.BindOrderButton<RepairOrderGenerator>(world, repair, "repair");
-			}
 		}
 	}
 
@@ -52,10 +43,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		{
 			var power = widget as ButtonWidget;
 			if (power != null)
-			{
-				power.GetKey = _ => Game.Settings.Keys.PowerDownKey;
 				OrderButtonsChromeUtils.BindOrderButton<PowerDownOrderGenerator>(world, power, "power");
-			}
 		}
 	}
 
@@ -66,10 +54,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		{
 			var beacon = widget as ButtonWidget;
 			if (beacon != null)
-			{
-				beacon.GetKey = _ => Game.Settings.Keys.PlaceBeaconKey;
 				OrderButtonsChromeUtils.BindOrderButton<BeaconOrderGenerator>(world, beacon, "beacon");
-			}
 		}
 	}
 

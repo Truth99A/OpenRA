@@ -1,19 +1,19 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Eluant;
-using OpenRA.Graphics;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Scripting;
 
 namespace OpenRA.Mods.Common.Scripting
@@ -31,26 +31,23 @@ namespace OpenRA.Mods.Common.Scripting
 		public string Name { get { return Player.PlayerName; } }
 
 		[Desc("The player's color.")]
-		public HSLColor Color { get { return Player.Color; } }
-
-		[Desc("The player's race. (DEPRECATED! Use the `Faction` property.)")]
-		public string Race
-		{
-			get
-			{
-				Game.Debug("The property `PlayerProperties.Race` is deprecated! Use `PlayerProperties.Faction` instead!");
-				return Player.PlayerReference.Faction;
-			}
-		}
+		public Color Color { get { return Player.Color; } }
 
 		[Desc("The player's faction.")]
-		public string Faction { get { return Player.PlayerReference.Faction; } }
+		public string Faction { get { return Player.Faction.InternalName; } }
 
 		[Desc("The player's spawnpoint ID.")]
 		public int Spawn { get { return Player.SpawnPoint; } }
 
 		[Desc("The player's team ID.")]
-		public int Team { get { return Player.PlayerReference.Team; } }
+		public int Team
+		{
+			get
+			{
+				var c = Player.World.LobbyInfo.Clients.FirstOrDefault(i => i.Index == Player.ClientIndex);
+				return c != null ? c.Team : 0;
+			}
+		}
 
 		[Desc("Returns true if the player is a bot.")]
 		public bool IsBot { get { return Player.IsBot; } }
@@ -59,7 +56,13 @@ namespace OpenRA.Mods.Common.Scripting
 		public bool IsNonCombatant { get { return Player.NonCombatant; } }
 
 		[Desc("Returns true if the player is the local player.")]
-		public bool IsLocalPlayer { get { return Player == (Player.World.RenderPlayer ?? Player.World.LocalPlayer); }	}
+		public bool IsLocalPlayer { get { return Player == (Player.World.RenderPlayer ?? Player.World.LocalPlayer); } }
+
+		[Desc("Returns all living actors staying inside the world for this player.")]
+		public Actor[] GetActors()
+		{
+			return Player.World.Actors.Where(actor => actor.Owner == Player && !actor.IsDead && actor.IsInWorld).ToArray();
+		}
 
 		[Desc("Returns an array of actors representing all ground attack units of this player.")]
 		public Actor[] GetGroundAttackers()
@@ -80,6 +83,21 @@ namespace OpenRA.Mods.Common.Scripting
 
 			result.AddRange(Player.World.Actors
 				.Where(actor => actor.Owner == Player && !actor.IsDead && actor.IsInWorld && actor.Info.Name == ai.Name));
+
+			return result.ToArray();
+		}
+
+		[Desc("Returns all living actors of the specified types of this player.")]
+		public Actor[] GetActorsByTypes(string[] types)
+		{
+			var result = new List<Actor>();
+
+			foreach (var type in types)
+				if (!Context.World.Map.Rules.Actors.ContainsKey(type))
+					throw new LuaException("Unknown actor type '{0}'".F(type));
+
+			result.AddRange(Player.World.Actors
+				.Where(actor => actor.Owner == Player && !actor.IsDead && actor.IsInWorld && types.Contains(actor.Info.Name)));
 
 			return result.ToArray();
 		}

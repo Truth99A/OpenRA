@@ -1,17 +1,23 @@
-if Map.Difficulty == "Easy" then
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
+if Map.LobbyOption("difficulty") == "easy" then
 	TanyaType = "e7"
 	ReinforceCash = 5000
 	HoldAITime = DateTime.Minutes(3)
 	SpecialCameras = true
-elseif Map.Difficulty == "Normal" then
+elseif Map.LobbyOption("difficulty") == "normal" then
 	TanyaType = "e7.noautotarget"
-	ChangeStance = true
 	ReinforceCash = 2250
 	HoldAITime = DateTime.Minutes(2)
 	SpecialCameras = true
 else
 	TanyaType = "e7.noautotarget"
-	ChangeStance = true
 	ReinforceCash = 1500
 	HoldAITime = DateTime.Minutes(1) + DateTime.Seconds(30)
 	SendWaterTransports = true
@@ -78,12 +84,11 @@ end
 
 Tick = function()
 	if FollowTruk then
-		TrukCamera.Teleport(Truk.Location)
 		Camera.Position = Truk.CenterPosition
 	end
 
 	if ussr.HasNoRequiredUnits() then
-		if not greece.IsObjectiveCompleted(KillAll) and Map.Difficulty == "Real tough guy" then
+		if not greece.IsObjectiveCompleted(KillAll) and Map.LobbyOption("difficulty") == "tough" then
 			SendWaterExtraction()
 		end
 		greece.MarkCompletedObjective(KillAll)
@@ -144,7 +149,7 @@ end
 
 WarfactoryInfiltrated = function()
 	FollowTruk = true
-	TrukCamera = Actor.Create("camera.truk", true, { Owner = greece, Location = Truk.Location })
+	Truk.GrantCondition("hijacked")
 
 	Truk.Wait(DateTime.Seconds(1))
 	Utils.Do(TrukPath, function(waypoint)
@@ -166,19 +171,18 @@ MissInfiltrated = function()
 			Media.PlaySoundNotification(greece, sound)
 		end)
 	end
-	TanyasColt = Actor.Create("Colt", true, { Owner = greece, Location = Prison.Location + CVec.New(1, 6) })
+	Prison.Attack(Prison)
 
 	Trigger.AfterDelay(DateTime.Seconds(6), FreeTanya)
 end
 
 FreeTanya = function()
-	TanyasColt.Destroy()
+	Prison.Stop()
 	Tanya = Actor.Create(TanyaType, true, { Owner = greece, Location = Prison.Location + CVec.New(1, 1) })
-	Tanya.Scatter()
 	Tanya.Demolish(Prison)
+	Tanya.Move(Tanya.Location + CVec.New(Utils.RandomInteger(-1, 2), 1))
 
-	if ChangeStance then
-		Tanya.Stance = "HoldFire"
+	if TanyaType == "e7.noautotarget" then
 		Trigger.AfterDelay(DateTime.Seconds(1), function()
 			Media.DisplayMessage("According to the rules of engagement I need your explicit orders to fire, Commander!", "Tanya")
 		end)
@@ -186,7 +190,7 @@ FreeTanya = function()
 
 	Trigger.OnKilled(Tanya, function() ussr.MarkCompletedObjective(ussrObj) end)
 
-	if Map.Difficulty == "Real tough guy" then
+	if Map.LobbyOption("difficulty") == "tough" then
 		KillSams = greece.AddPrimaryObjective("Destroy all four SAM Sites that block\nour reinforcements' helicopter.")
 
 		greece.MarkCompletedObjective(mainObj)
@@ -213,6 +217,10 @@ SendSpy = function()
 		SpyCameraA = Actor.Create("camera", true, { Owner = greece, Location = SpyCamera1.Location })
 		SpyCameraB = Actor.Create("camera", true, { Owner = greece, Location = SpyCamera2.Location })
 	end
+
+	Trigger.AfterDelay(DateTime.Seconds(3), function()
+		Media.DisplayMessage("Commander! You have to disguise me in order to get through the enemy patrols.", "Spy")
+	end)
 end
 
 ActivatePatrols = function()
@@ -221,11 +229,6 @@ ActivatePatrols = function()
 	Trigger.AfterDelay(DateTime.Seconds(3), function()
 		GroupPatrol(PatrolA, PatrolAPath, DateTime.Seconds(7))
 		GroupPatrol(PatrolB, PatrolBPath, DateTime.Seconds(6))
-	end)
-
-	local units = Map.ActorsInBox(Map.TopLeft, Map.BottomRight, function(self) return self.Owner == soviets and self.HasProperty("AutoTarget") end)
-	Utils.Do(units, function(unit)
-		unit.Stance = "Defend"
 	end)
 end
 
@@ -237,6 +240,10 @@ InitTriggers = function()
 	end)
 
 	Trigger.OnInfiltrated(Prison, function()
+		if not greece.IsObjectiveCompleted(infWarfactory) then
+			Media.DisplayMessage("Good work! But next time skip the heroics!", "Battlefield Control")
+			greece.MarkCompletedObjective(infWarfactory)
+		end
 		Trigger.ClearAll(Spy)
 		Trigger.AfterDelay(DateTime.Seconds(2), MissInfiltrated)
 	end)
@@ -252,12 +259,11 @@ InitTriggers = function()
 			Media.PlaySoundNotification(greece, SpyVoice)
 
 			FollowTruk = false
-			TrukCamera.Destroy()
 
 			if SpecialCameras then
 				PrisonCamera = Actor.Create("camera", true, { Owner = greece, Location = TrukWaypoint5.Location })
 			else
-				PrisonCamera = Actor.Create("camera.truk", true, { Owner = greece, Location = Prison.Location + CVec.New(1, 1) })
+				PrisonCamera = Actor.Create("camera.small", true, { Owner = greece, Location = Prison.Location + CVec.New(1, 1) })
 			end
 
 			Trigger.OnKilled(Spy, function() ussr.MarkCompletedObjective(ussrObj) end)
@@ -273,7 +279,7 @@ InitTriggers = function()
 		end
 	end)
 
-	if Map.Difficulty ~= "Real tough guy" then
+	if Map.LobbyOption("difficulty") ~= "tough" then
 		Trigger.OnKilled(Mammoth, function()
 			Trigger.AfterDelay(HoldAITime - DateTime.Seconds(45), function() HoldProduction = false end)
 			Trigger.AfterDelay(HoldAITime, function() Attacking = true end)
@@ -295,7 +301,7 @@ InitTriggers = function()
 		Trigger.AfterDelay(DateTime.Seconds(7), flare.Destroy)
 		Media.PlaySpeechNotification(greece, "SignalFlare")
 
-		if Map.Difficulty == "Real tough guy" then
+		if Map.LobbyOption("difficulty") == "tough" then
 			Reinforcements.ReinforceWithTransport(greece, InsertionHeliType, HeliReinforcements, ExtractionPath, { ExtractionPath[1] })
 			if not Harvester.IsDead then
 				Harvester.FindResources()

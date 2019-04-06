@@ -1,37 +1,33 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System;
-using System.Linq;
-using OpenRA;
-using OpenRA.GameRules;
-using OpenRA.Traits;
-
 namespace OpenRA.Mods.Common.Traits
 {
-	[Desc("Range of this actor is multiplied based on upgrade level.")]
-	public class RangeMultiplierInfo : UpgradeMultiplierTraitInfo, IRangeModifierInfo
+	[Desc("Modifies the range of weapons fired by this actor.")]
+	public class RangeMultiplierInfo : ConditionalTraitInfo, IRangeModifierInfo
 	{
-		public override object Create(ActorInitializer init) { return new RangeMultiplier(this, init.Self.Info.Name); }
+		[FieldLoader.Require]
+		[Desc("Percentage modifier to apply.")]
+		public readonly int Modifier = 100;
 
-		public int GetRangeModifierDefault()
-		{
-			return BaseLevel > 0 || UpgradeTypes.Length == 0 ? 100 : Modifier[0];
-		}
+		public override object Create(ActorInitializer init) { return new RangeMultiplier(this); }
+
+		int IRangeModifierInfo.GetRangeModifierDefault() { return EnabledByDefault ? Modifier : 100; }
 	}
 
-	public class RangeMultiplier : UpgradeMultiplierTrait, IRangeModifier
+	public class RangeMultiplier : ConditionalTrait<RangeMultiplierInfo>, IRangeModifier
 	{
-		public RangeMultiplier(RangeMultiplierInfo info, string actorType)
-			: base(info, "RangeMultiplier", actorType) { }
+		public RangeMultiplier(RangeMultiplierInfo info)
+			: base(info) { }
 
-		public int GetRangeModifier() { return GetModifier(); }
+		int IRangeModifier.GetRangeModifier() { return IsTraitDisabled ? 100 : Info.Modifier; }
 	}
 }

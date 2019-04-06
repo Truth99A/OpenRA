@@ -1,27 +1,27 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using OpenRA.Graphics;
 using OpenRA.Network;
+using OpenRA.Primitives;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets
 {
 	public class SpawnOccupant
 	{
-		public readonly HSLColor Color;
-		public readonly int ClientIndex;
+		public readonly Color Color;
 		public readonly string PlayerName;
 		public readonly int Team;
 		public readonly string Faction;
@@ -30,7 +30,6 @@ namespace OpenRA.Mods.Common.Widgets
 		public SpawnOccupant(Session.Client client)
 		{
 			Color = client.Color;
-			ClientIndex = client.Index;
 			PlayerName = client.Name;
 			Team = client.Team;
 			Faction = client.Faction;
@@ -40,10 +39,18 @@ namespace OpenRA.Mods.Common.Widgets
 		public SpawnOccupant(GameInformation.Player player)
 		{
 			Color = player.Color;
-			ClientIndex = player.ClientIndex;
 			PlayerName = player.Name;
 			Team = player.Team;
 			Faction = player.FactionId;
+			SpawnPoint = player.SpawnPoint;
+		}
+
+		public SpawnOccupant(GameClient player, bool suppressFaction)
+		{
+			Color = player.Color;
+			PlayerName = player.Name;
+			Team = player.Team;
+			Faction = !suppressFaction ? player.Faction : null;
 			SpawnPoint = player.SpawnPoint;
 		}
 	}
@@ -66,6 +73,7 @@ namespace OpenRA.Mods.Common.Widgets
 		public Func<Dictionary<CPos, SpawnOccupant>> SpawnOccupants = () => new Dictionary<CPos, SpawnOccupant>();
 		public Action<MouseInput> OnMouseDown = _ => { };
 		public int TooltipSpawnIndex = -1;
+		public bool ShowUnoccupiedSpawnpoints = true;
 
 		Rectangle mapRect;
 		float previewScale = 0;
@@ -121,7 +129,11 @@ namespace OpenRA.Mods.Common.Widgets
 		public override void MouseEntered()
 		{
 			if (TooltipContainer != null)
-				tooltipContainer.Value.SetTooltip(TooltipTemplate, new WidgetArgs() { { "preview", this } });
+				tooltipContainer.Value.SetTooltip(TooltipTemplate, new WidgetArgs()
+					{
+						{ "preview", this },
+						{ "showUnoccupiedSpawnpoints", ShowUnoccupiedSpawnpoints }
+					});
 		}
 
 		public override void MouseExited()
@@ -170,7 +182,7 @@ namespace OpenRA.Mods.Common.Widgets
 			TooltipSpawnIndex = -1;
 			if (ShowSpawnPoints)
 			{
-				var colors = SpawnOccupants().ToDictionary(c => c.Key, c => c.Value.Color.RGB);
+				var colors = SpawnOccupants().ToDictionary(c => c.Key, c => c.Value.Color);
 
 				var spawnPoints = preview.SpawnPoints;
 				var gridType = preview.GridType;

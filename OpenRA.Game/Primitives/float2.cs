@@ -1,34 +1,30 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Drawing;
 using System.Runtime.InteropServices;
+using OpenRA.Primitives;
 
 namespace OpenRA
 {
 	[SuppressMessage("StyleCop.CSharp.NamingRules", "SA1300:ElementMustBeginWithUpperCaseLetter", Justification = "Mimic a built-in type alias.")]
 	[StructLayout(LayoutKind.Sequential)]
-	public struct float2
+	public struct float2 : IEquatable<float2>
 	{
-		public float X, Y;
+		public readonly float X, Y;
 
 		public float2(float x, float y) { X = x; Y = y; }
-		public float2(PointF p) { X = p.X; Y = p.Y; }
-		public float2(Point p) { X = p.X; Y = p.Y; }
 		public float2(Size p) { X = p.Width; Y = p.Height; }
-		public float2(SizeF p) { X = p.Width; Y = p.Height; }
-
-		public PointF ToPointF() { return new PointF(X, Y); }
-		public SizeF ToSizeF() { return new SizeF(X, Y); }
+		public float2(int2 p) { X = p.X; Y = p.Y; }
 
 		public static implicit operator float2(int2 src) { return new float2(src.X, src.Y); }
 
@@ -72,13 +68,13 @@ namespace OpenRA
 
 		public static bool operator ==(float2 me, float2 other) { return me.X == other.X && me.Y == other.Y; }
 		public static bool operator !=(float2 me, float2 other) { return !(me == other); }
+
 		public override int GetHashCode() { return X.GetHashCode() ^ Y.GetHashCode(); }
 
-		public override bool Equals(object obj)
-		{
-			var o = obj as float2?;
-			return o != null && o == this;
-		}
+		public bool Equals(float2 other) { return this == other; }
+		public override bool Equals(object obj) { return obj is float2 && Equals((float2)obj); }
+
+		public override string ToString() { return X + "," + Y; }
 
 		public static readonly float2 Zero = new float2(0, 0);
 
@@ -92,7 +88,6 @@ namespace OpenRA
 		public static float Dot(float2 a, float2 b) { return a.X * b.X + a.Y * b.Y; }
 		public float2 Round() { return new float2((float)Math.Round(X), (float)Math.Round(Y)); }
 
-		public override string ToString() { return "{0},{1}".F(X, Y); }
 		public int2 ToInt2() { return new int2((int)X, (int)Y); }
 
 		public static float2 Max(float2 a, float2 b) { return new float2(Math.Max(a.X, b.X), Math.Max(a.Y, b.Y)); }

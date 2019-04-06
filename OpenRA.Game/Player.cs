@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -18,16 +19,32 @@ using OpenRA.Network;
 using OpenRA.Primitives;
 using OpenRA.Scripting;
 using OpenRA.Traits;
+using OpenRA.Widgets;
 
 namespace OpenRA
 {
-	public enum PowerState { Normal, Low, Critical }
+	[Flags]
+	public enum PowerState
+	{
+		Normal = 1,
+		Low = 2,
+		Critical = 4
+	}
+
 	public enum WinState { Undefined, Won, Lost }
 
 	public class Player : IScriptBindable, IScriptNotifyBind, ILuaTableBinding, ILuaEqualityBinding, ILuaToStringBinding
 	{
+		struct StanceColors
+		{
+			public Color Self;
+			public Color Allies;
+			public Color Enemies;
+			public Color Neutrals;
+		}
+
 		public readonly Actor PlayerActor;
-		public readonly HSLColor Color;
+		public readonly Color Color;
 
 		public readonly string PlayerName;
 		public readonly string InternalName;
@@ -36,20 +53,36 @@ namespace OpenRA
 		public readonly bool Playable = true;
 		public readonly int ClientIndex;
 		public readonly PlayerReference PlayerReference;
+		public readonly bool IsBot;
+		public readonly string BotType;
+		public readonly Shroud Shroud;
+		public readonly FrozenActorLayer FrozenActorLayer;
 
 		/// <summary>The faction (including Random, etc) that was selected in the lobby.</summary>
 		public readonly FactionInfo DisplayFaction;
 
 		public WinState WinState = WinState.Undefined;
-		public bool IsBot;
 		public int SpawnPoint;
 		public bool HasObjectives = false;
 		public bool Spectating;
 
-		public Shroud Shroud;
 		public World World { get; private set; }
 
-		readonly IFogVisibilityModifier[] fogVisibilities;
+		readonly bool inMissionMap;
+		readonly IUnlocksRenderPlayer[] unlockRenderPlayer;
+
+		public bool UnlockedRenderPlayer
+		{
+			get
+			{
+				if (unlockRenderPlayer.Any(x => x.RenderPlayerUnlocked))
+					return true;
+
+				return WinState != WinState.Undefined && !inMissionMap;
+			}
+		}
+
+		readonly StanceColors stanceColors;
 
 		static FactionInfo ChooseFaction(World world, string name, bool requireSelectable = true)
 		{
@@ -82,19 +115,27 @@ namespace OpenRA
 
 		public Player(World world, Session.Client client, PlayerReference pr)
 		{
-			string botType;
-
 			World = world;
 			InternalName = pr.Name;
 			PlayerReference = pr;
+
+			inMissionMap = world.Map.Visibility.HasFlag(MapVisibility.MissionSelector);
 
 			// Real player or host-created bot
 			if (client != null)
 			{
 				ClientIndex = client.Index;
 				Color = client.Color;
-				PlayerName = client.Name;
-				botType = client.Bot;
+				if (client.Bot != null)
+				{
+					var botInfo = world.Map.Rules.Actors["player"].TraitInfos<IBotInfo>().First(b => b.Type == client.Bot);
+					var botsOfSameType = world.LobbyInfo.Clients.Where(c => c.Bot == client.Bot).ToArray();
+					PlayerName = botsOfSameType.Length == 1 ? botInfo.Name : "{0} {1}".F(botInfo.Name, botsOfSameType.IndexOf(client) + 1);
+				}
+				else
+					PlayerName = client.Name;
+
+				BotType = client.Bot;
 				Faction = ChooseFaction(world, client.Faction, !pr.LockFaction);
 				DisplayFaction = ChooseDisplayFaction(world, client.Faction);
 			}
@@ -107,26 +148,33 @@ namespace OpenRA
 				NonCombatant = pr.NonCombatant;
 				Playable = pr.Playable;
 				Spectating = pr.Spectating;
-				botType = pr.Bot;
+				BotType = pr.Bot;
 				Faction = ChooseFaction(world, pr.Faction, false);
 				DisplayFaction = ChooseDisplayFaction(world, pr.Faction);
 			}
 
-			PlayerActor = world.CreateActor("Player", new TypeDictionary { new OwnerInit(this) });
+			var playerActorType = world.Type == WorldType.Editor ? "EditorPlayer" : "Player";
+			PlayerActor = world.CreateActor(playerActorType, new TypeDictionary { new OwnerInit(this) });
 			Shroud = PlayerActor.Trait<Shroud>();
-
-			fogVisibilities = PlayerActor.TraitsImplementing<IFogVisibilityModifier>().ToArray();
+			FrozenActorLayer = PlayerActor.TraitOrDefault<FrozenActorLayer>();
 
 			// Enable the bot logic on the host
-			IsBot = botType != null;
+			IsBot = BotType != null;
 			if (IsBot && Game.IsHost)
 			{
-				var logic = PlayerActor.TraitsImplementing<IBot>().FirstOrDefault(b => b.Info.Name == botType);
+				var logic = PlayerActor.TraitsImplementing<IBot>().FirstOrDefault(b => b.Info.Type == BotType);
 				if (logic == null)
-					Log.Write("debug", "Invalid bot type: {0}", botType);
+					Log.Write("debug", "Invalid bot type: {0}", BotType);
 				else
 					logic.Activate(this);
 			}
+
+			stanceColors.Self = ChromeMetrics.Get<Color>("PlayerStanceColorSelf");
+			stanceColors.Allies = ChromeMetrics.Get<Color>("PlayerStanceColorAllies");
+			stanceColors.Enemies = ChromeMetrics.Get<Color>("PlayerStanceColorEnemies");
+			stanceColors.Neutrals = ChromeMetrics.Get<Color>("PlayerStanceColorNeutrals");
+
+			unlockRenderPlayer = PlayerActor.TraitsImplementing<IUnlocksRenderPlayer>().ToArray();
 		}
 
 		public override string ToString()
@@ -141,31 +189,30 @@ namespace OpenRA
 			return p == null || Stances[p] == Stance.Ally || (p.Spectating && !NonCombatant);
 		}
 
-		public void SetStance(Player target, Stance s)
+		public Color PlayerStanceColor(Actor a)
 		{
-			var oldStance = Stances[target];
-			Stances[target] = s;
-			target.Shroud.UpdatePlayerStance(World, this, oldStance, s);
-			Shroud.UpdatePlayerStance(World, target, oldStance, s);
+			var player = a.World.RenderPlayer ?? a.World.LocalPlayer;
+			if (player != null && !player.Spectating)
+			{
+				var apparentOwner = a.EffectiveOwner != null && a.EffectiveOwner.Disguised
+					? a.EffectiveOwner.Owner
+					: a.Owner;
 
-			foreach (var nsc in World.ActorsWithTrait<INotifyStanceChanged>())
-				nsc.Trait.StanceChanged(nsc.Actor, this, target, oldStance, s);
+				if (a.Owner.IsAlliedWith(a.World.RenderPlayer))
+					apparentOwner = a.Owner;
+
+				if (apparentOwner == player)
+					return stanceColors.Self;
+
+				if (apparentOwner.IsAlliedWith(player))
+					return stanceColors.Allies;
+
+				if (!apparentOwner.NonCombatant)
+					return stanceColors.Enemies;
+			}
+
+			return stanceColors.Neutrals;
 		}
-
-		public bool CanViewActor(Actor a)
-		{
-			return a.CanBeViewedByPlayer(this);
-		}
-
-		public bool CanTargetActor(Actor a)
-		{
-			if (HasFogVisibility && fogVisibilities.Any(f => f.IsVisible(a)))
-				return true;
-
-			return CanViewActor(a);
-		}
-
-		public bool HasFogVisibility { get { return fogVisibilities.Any(f => f.HasFogVisibility()); } }
 
 		#region Scripting interface
 

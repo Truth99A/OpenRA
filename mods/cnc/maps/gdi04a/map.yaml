@@ -1,10 +1,8 @@
-MapFormat: 8
+MapFormat: 11
 
 RequiresMod: cnc
 
-Title: Get the Rods back (a)
-
-Description: Nod has captured classified GDI property.\n\nYou must find and retrieve the stolen equipment.\n\nIt is being transported in a shipping crate.\n\nUse the new APC to strategically transport infantry through Nod forces.
+Title: 04a: Get the Rods back
 
 Author: Westwood Studios
 
@@ -16,25 +14,9 @@ Bounds: 7,24,51,36
 
 Visibility: MissionSelector
 
-Type: Campaign
+Categories: Campaign
 
-Videos:
-	BackgroundInfo: bkground.vqa
-	Briefing: gdi4b.vqa
-	GameStart: nitejump.vqa
-	GameWon: burdet1.vqa
-	GameLost: gameover.vqa
-
-Options:
-	Crates: False
-	Creeps: False
-	Fog: True
-	Shroud: True
-	AllyBuildRadius: False
-	FragileAlliances: False
-	StartingCash: 0
-	ConfigurableStartingUnits: False
-	ShortGame: False
+LockPreview: True
 
 Players:
 	PlayerReference@Nod:
@@ -43,6 +25,7 @@ Players:
 		Color: FE1100
 		Allies: Nod
 		Enemies: GDI
+		Bot: campaign
 	PlayerReference@GDI:
 		Name: GDI
 		Playable: True
@@ -87,17 +70,11 @@ Actors:
 	Actor7: t08
 		Location: 46,26
 		Owner: Neutral
-	Actor8: t08
-		Location: 48,23
-		Owner: Neutral
 	Actor9: t17
 		Location: 42,24
 		Owner: Neutral
 	Actor10: tc02
 		Location: 50,28
-		Owner: Neutral
-	Actor11: tc03
-		Location: 46,22
 		Owner: Neutral
 	Actor12: tc01
 		Location: 17,48
@@ -173,9 +150,6 @@ Actors:
 		Owner: Neutral
 	Actor36: t06
 		Location: 23,24
-		Owner: Neutral
-	Actor37: t06
-		Location: 3,23
 		Owner: Neutral
 	Actor38: t07
 		Location: 12,35
@@ -432,7 +406,7 @@ Actors:
 		Facing: 192
 		SubCell: 3
 	HandOfNod: hand
-		Location: 30,52
+		Location: 30,53
 		Owner: Nod
 	Hunter1: bggy
 		Location: 35,43
@@ -446,7 +420,7 @@ Actors:
 		Location: 25,58
 		Owner: Neutral
 	NodHeliEntry: waypoint
-		Location: 41,23
+		Location: 41,24
 		Owner: Neutral
 	NodHeliLZ1: waypoint
 		Location: 31,39
@@ -467,79 +441,12 @@ Actors:
 		Location: 11,51
 		Owner: Neutral
 	GDIHeliEntry: waypoint
-		Location: 34,60
+		Location: 34,59
 		Owner: Neutral
 	GDIHeliLZ: waypoint
 		Location: 27,58
 		Owner: Neutral
 
-Smudges:
+Rules: cnc|rules/campaign-maprules.yaml, cnc|rules/campaign-tooltips.yaml, cnc|rules/campaign-palettes.yaml, rules.yaml
 
-Rules:
-	World:
-		-SpawnMPUnits:
-		-MPStartLocations:
-		-CrateSpawner:
-		LuaScript:
-			Scripts: gdi04a.lua
-		ObjectivesPanel:
-			PanelName: MISSION_OBJECTIVES
-		MusicPlaylist:
-			StartingMusic: fist226m
-	Player:
-		-ConquestVictoryConditions:
-		MissionObjectives:
-			EarlyGameOver: true
-	^Vehicle:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Tank:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Helicopter:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Infantry:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Plane:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Ship:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Building:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Wall:
-		Tooltip:
-			ShowOwnerRow: false
-	^Husk:
-		Tooltip:
-			GenericVisibility: Enemy, Ally, Neutral
-			GenericStancePrefix: false
-			ShowOwnerRow: false
-
-Sequences:
-
-VoxelSequences:
-
-Weapons:
-	Tiberium:
-		Warhead@1Dam: SpreadDamage
-			Damage: 6
-
-Voices:
-
-Music:
-
-Notifications:
-
-Translations:
+Weapons: weapons.yaml

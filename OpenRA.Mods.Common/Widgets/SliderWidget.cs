@@ -1,16 +1,17 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
-using System.Drawing;
 using OpenRA.Graphics;
+using OpenRA.Primitives;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets
@@ -83,12 +84,12 @@ namespace OpenRA.Mods.Common.Widgets
 			return ThumbRect.Contains(mi.Location);
 		}
 
-		float ValueFromPx(int x)
+		protected virtual float ValueFromPx(int x)
 		{
 			return MinimumValue + (MaximumValue - MinimumValue) * (x - 0.5f * RenderBounds.Height) / (RenderBounds.Width - RenderBounds.Height);
 		}
 
-		protected int PxFromValue(float x)
+		protected virtual int PxFromValue(float x)
 		{
 			return (int)(0.5f * RenderBounds.Height + (RenderBounds.Width - RenderBounds.Height) * (x - MinimumValue) / (MaximumValue - MinimumValue));
 		}

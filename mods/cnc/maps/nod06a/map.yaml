@@ -1,10 +1,8 @@
-MapFormat: 8
+MapFormat: 11
 
 RequiresMod: cnc
 
-Title: Steal The Detonator (a)
-
-Description: GDI has imported a Nuclear Detonator in an attempt to sway a few local political leaders. Penetrate the base and steal the detonator. A chopper will be sent to meet you at a designated landing zone. Look for the landing flare once you have stolen the device.
+Title: 06a: Steal the Detonator
 
 Author: Westwood Studios
 
@@ -16,23 +14,9 @@ Bounds: 16,17,46,45
 
 Visibility: MissionSelector
 
-Type: Campaign
+Categories: Campaign
 
-Videos:
-	Briefing: nod6.vqa
-	GameStart: sundial.vqa
-	GameLost: banner.vqa
-
-Options:
-	Crates: False
-	Creeps: False
-	Fog: True
-	Shroud: True
-	AllyBuildRadius: False
-	FragileAlliances: False
-	StartingCash: 0
-	ConfigurableStartingUnits: False
-	ShortGame: False
+LockPreview: True
 
 Players:
 	PlayerReference@Neutral:
@@ -42,14 +26,14 @@ Players:
 		Faction: gdi
 	PlayerReference@GDI:
 		Name: GDI
-		Playable: False
 		Faction: gdi
 		Color: F5D378
 		Enemies: Nod
+		Bot: campaign
 	PlayerReference@Nod:
 		Name: Nod
-		Playable: True
 		AllowBots: False
+		Playable: True
 		Required: True
 		LockFaction: True
 		Faction: nod
@@ -653,82 +637,39 @@ Actors:
 		Location: 36,23
 		Owner: GDI
 	Detonator: CRATE.plain
-		Location: 59, 43
+		Location: 59,43
 		Owner: GDI
-	Radar: hq
+	CommCenter: hq
 		Location: 57,32
 		Owner: GDI
+	Actor187: jeep
+		Owner: GDI
+		Location: 40,21
+		Facing: 92
+		TurretFacing: 92
+	Actor188: e1
+		Owner: GDI
+		Location: 41,22
+		SubCell: 3
+		Facing: 92
+		TurretFacing: 92
+	Actor189: e1
+		Owner: GDI
+		Location: 39,20
+		SubCell: 3
+		Facing: 92
+		TurretFacing: 92
+	Actor190: e3
+		Owner: GDI
+		Location: 40,20
+		SubCell: 3
+		Facing: 92
+		TurretFacing: 92
+	Actor191: e3
+		Owner: GDI
+		Location: 40,20
+		SubCell: 1
+		Facing: 92
+		TurretFacing: 92
 
-Smudges:
-
-Rules:
-	Player:
-		-ConquestVictoryConditions:
-		MissionObjectives:
-			EarlyGameOver: true
-		EnemyWatcher:
-	World:
-		-CrateSpawner:
-		-SpawnMPUnits:
-		-MPStartLocations:
-		ObjectivesPanel:
-			PanelName: MISSION_OBJECTIVES
-		LuaScript:
-			Scripts: nod06a.lua
-		MusicPlaylist:
-			StartingMusic: rout
-			VictoryMusic: nod_win1
-	^Vehicle:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Tank:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Infantry:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-		AnnounceOnSeen:
-	^Plane:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Ship:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Building:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Husk:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^CivBuildingHusk:
-		Tooltip:
-			ShowOwnerRow: false
-	HARV:
-		Harvester:
-			SearchFromProcRadius: 64
-	FLARE:
-		Tooltip:
-			ShowOwnerRow: false
-	TRAN:
-		-Selectable:
-
-Sequences:
-
-VoxelSequences:
-
-Weapons:
-
-Voices:
-
-Music:
-
-Notifications:
-
-Translations:
+Rules: cnc|rules/campaign-maprules.yaml, cnc|rules/campaign-tooltips.yaml, cnc|rules/campaign-palettes.yaml, rules.yaml

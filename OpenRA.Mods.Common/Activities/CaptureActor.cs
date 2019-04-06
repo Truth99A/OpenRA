@@ -1,78 +1,149 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2014 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Activities
 {
 	public class CaptureActor : Enter
 	{
-		readonly Actor actor;
-		readonly Building building;
-		readonly Capturable capturable;
-		readonly CapturesInfo capturesInfo;
-		readonly Health health;
+		readonly CaptureManager manager;
 
-		public CaptureActor(Actor self, Actor target)
-			: base(self, target)
+		Actor enterActor;
+		CaptureManager enterCaptureManager;
+
+		public CaptureActor(Actor self, Target target)
+			: base(self, target, Color.Red)
 		{
-			actor = target;
-			building = actor.TraitOrDefault<Building>();
-			capturesInfo = self.Info.TraitInfo<CapturesInfo>();
-			capturable = target.Trait<Capturable>();
-			health = actor.Trait<Health>();
+			manager = self.Trait<CaptureManager>();
 		}
 
-		protected override bool CanReserve(Actor self)
+		protected override bool TryStartEnter(Actor self, Actor targetActor)
 		{
-			return !capturable.BeingCaptured && capturable.Info.CanBeTargetedBy(self, actor.Owner);
+			if (enterActor != targetActor)
+			{
+				enterActor = targetActor;
+				enterCaptureManager = targetActor.TraitOrDefault<CaptureManager>();
+			}
+
+			// Make sure we can still capture the target before entering
+			// (but not before, because this may stop the actor in the middle of nowhere)
+			if (enterCaptureManager == null || !enterCaptureManager.CanBeTargetedBy(enterActor, self, manager))
+			{
+				Cancel(self, true);
+				return false;
+			}
+
+			// StartCapture returns false when a capture delay is enabled
+			// We wait until it returns true before allowing entering the target
+			Captures captures;
+			if (!manager.StartCapture(self, enterActor, enterCaptureManager, out captures))
+				return false;
+
+			if (!captures.Info.ConsumedByCapture)
+			{
+				// Immediately capture without entering or disposing the actor
+				DoCapture(self, captures);
+				Cancel(self, true);
+				return false;
+			}
+
+			return true;
 		}
 
-		protected override void OnInside(Actor self)
+		protected override void OnEnterComplete(Actor self, Actor targetActor)
 		{
-			if (actor.IsDead || capturable.BeingCaptured)
+			// Make sure the target hasn't changed while entering
+			// OnEnterComplete is only called if targetActor is alive
+			if (enterActor != targetActor)
 				return;
 
-			if (building != null && !building.Lock())
+			if (enterCaptureManager.BeingCaptured || !enterCaptureManager.CanBeTargetedBy(enterActor, self, manager))
 				return;
 
+			// Prioritize capturing over sabotaging
+			var captures = manager.ValidCapturesWithLowestSabotageThreshold(self, enterActor, enterCaptureManager);
+			if (captures == null)
+				return;
+
+			DoCapture(self, captures);
+		}
+
+		void DoCapture(Actor self, Captures captures)
+		{
+			var oldOwner = enterActor.Owner;
 			self.World.AddFrameEndTask(w =>
 			{
-				if (building != null && building.Locked)
-					building.Unlock();
-
-				if (actor.IsDead || capturable.BeingCaptured)
+				// The target died or was already captured during this tick
+				if (enterActor.IsDead || oldOwner != enterActor.Owner)
 					return;
 
-				var lowEnoughHealth = health.HP <= capturable.Info.CaptureThreshold * health.MaxHP;
-				if (!capturesInfo.Sabotage || lowEnoughHealth || actor.Owner.NonCombatant)
+				// Sabotage instead of capture
+				if (captures.Info.SabotageThreshold > 0 && !enterActor.Owner.NonCombatant)
 				{
-					var oldOwner = actor.Owner;
+					var health = enterActor.Trait<IHealth>();
 
-					actor.ChangeOwner(self.Owner);
+					// Cast to long to avoid overflow when multiplying by the health
+					if (100 * (long)health.HP > captures.Info.SabotageThreshold * (long)health.MaxHP)
+					{
+						var damage = (int)((long)health.MaxHP * captures.Info.SabotageHPRemoval / 100);
+						enterActor.InflictDamage(self, new Damage(damage, captures.Info.SabotageDamageTypes));
 
-					foreach (var t in actor.TraitsImplementing<INotifyCapture>())
-						t.OnCapture(actor, self, oldOwner, self.Owner);
+						if (captures.Info.ConsumedByCapture)
+							self.Dispose();
 
-					if (building != null && building.Locked)
-						building.Unlock();
+						return;
+					}
 				}
-				else
+
+				// Do the capture
+				enterActor.ChangeOwnerSync(self.Owner);
+
+				foreach (var t in enterActor.TraitsImplementing<INotifyCapture>())
+					t.OnCapture(enterActor, self, oldOwner, self.Owner, captures.Info.CaptureTypes);
+
+				if (self.Owner.Stances[oldOwner].HasStance(captures.Info.PlayerExperienceStances))
 				{
-					var damage = (int)(health.MaxHP * capturesInfo.SabotageHPRemoval);
-					actor.InflictDamage(self, damage, null);
+					var exp = self.Owner.PlayerActor.TraitOrDefault<PlayerExperience>();
+					if (exp != null)
+						exp.GiveExperience(captures.Info.PlayerExperience);
 				}
 
-				self.Dispose();
+				if (captures.Info.ConsumedByCapture)
+					self.Dispose();
 			});
+		}
+
+		protected override void OnLastRun(Actor self)
+		{
+			CancelCapture(self);
+			base.OnLastRun(self);
+		}
+
+		protected override void OnActorDispose(Actor self)
+		{
+			CancelCapture(self);
+			base.OnActorDispose(self);
+		}
+
+		protected override void OnCancel(Actor self)
+		{
+			CancelCapture(self);
+		}
+
+		void CancelCapture(Actor self)
+		{
+			manager.CancelCapture(self, enterActor, enterCaptureManager);
 		}
 	}
 }

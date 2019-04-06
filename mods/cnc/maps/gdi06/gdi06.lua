@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 IslandSamSites = { SAM01, SAM02 }
 NodBase = { PowerPlant1, PowerPlant2, PowerPlant3, PowerPlant4, PowerPlant5, Refinery, HandOfNod, Silo1, Silo2, Silo3, Silo4, ConYard, CommCenter }
 
@@ -89,10 +97,10 @@ WorldLoaded = function()
 		Media.PlaySpeechNotification(player, "Lose")
 	end)
 
-	if Map.Difficulty == "Easy" then
+	if Map.LobbyOption("difficulty") == "easy" then
 		CommandoType = "rmbo.easy"
 		KillCounterHuntThreshold = 30
-	elseif Map.Difficulty == "Hard" then
+	elseif Map.LobbyOption("difficulty") == "hard" then
 		CommandoType = "rmbo.hard"
 		KillCounterHuntThreshold = 15
 	else

@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -17,15 +18,12 @@ namespace OpenRA.Server
 	public interface IInterpretCommand { bool InterpretCommand(Server server, Connection conn, Session.Client client, string cmd); }
 	public interface INotifySyncLobbyInfo { void LobbyInfoSynced(Server server); }
 	public interface INotifyServerStart { void ServerStarted(Server server); }
+	public interface INotifyServerEmpty { void ServerEmpty(Server server); }
 	public interface INotifyServerShutdown { void ServerShutdown(Server server); }
 	public interface IStartGame { void GameStarted(Server server); }
 	public interface IClientJoined { void ClientJoined(Server server, Connection conn); }
 	public interface IEndGame { void GameEnded(Server server); }
-	public interface ITick
-	{
-		void Tick(Server server);
-		int TickTimeout { get; }
-	}
+	public interface ITick { void Tick(Server server); }
 
 	public abstract class ServerTrait { }
 

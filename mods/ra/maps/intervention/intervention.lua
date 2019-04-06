@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 BeachheadTrigger =
 {
 	CPos.New(120, 90), CPos.New(120, 89), CPos.New(120, 88), CPos.New(121, 88), CPos.New(122, 88), CPos.New(123, 88), CPos.New(124, 88),
@@ -9,9 +17,9 @@ BeachheadTrigger =
 	CPos.New(137, 104), CPos.New(137, 105), CPos.New(137, 106), CPos.New(136, 106), CPos.New(136, 107)
 }
 
-Difficulty = Map.Difficulty
+Difficulty = Map.LobbyOption("difficulty")
 
-if Difficulty == "Medium" then
+if Difficulty == "normal" then
 	BaseRaidInterval = DateTime.Minutes(3)
 	BaseFrontAttackInterval = DateTime.Minutes(3) + DateTime.Seconds(30)
 	BaseRearAttackInterval = DateTime.Minutes(8)

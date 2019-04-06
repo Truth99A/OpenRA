@@ -1,21 +1,19 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using OpenRA.Graphics;
-using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
@@ -73,10 +71,10 @@ namespace OpenRA.Mods.Common.Traits
 
 		struct TileInfo
 		{
-			public readonly float2 ScreenPosition;
+			public readonly float3 ScreenPosition;
 			public readonly byte Variant;
 
-			public TileInfo(float2 screenPosition, byte variant)
+			public TileInfo(float3 screenPosition, byte variant)
 			{
 				ScreenPosition = screenPosition;
 				Variant = variant;
@@ -97,6 +95,7 @@ namespace OpenRA.Mods.Common.Traits
 		Shroud currentShroud;
 		Func<PPos, bool> visibleUnderShroud, visibleUnderFog;
 		TerrainSpriteLayer shroudLayer, fogLayer;
+		bool disposed;
 
 		public ShroudRenderer(World world, ShroudRendererInfo info)
 		{
@@ -123,10 +122,11 @@ namespace OpenRA.Mods.Common.Traits
 			shroudSprites = new Sprite[variantCount * variantStride];
 			fogSprites = new Sprite[variantCount * variantStride];
 
+			var sequenceProvider = map.Rules.Sequences;
 			for (var j = 0; j < variantCount; j++)
 			{
-				var shroud = map.SequenceProvider.GetSequence(info.Sequence, info.ShroudVariants[j]);
-				var fog = map.SequenceProvider.GetSequence(info.Sequence, info.FogVariants[j]);
+				var shroud = sequenceProvider.GetSequence(info.Sequence, info.ShroudVariants[j]);
+				var fog = sequenceProvider.GetSequence(info.Sequence, info.FogVariants[j]);
 				for (var i = 0; i < info.Index.Length; i++)
 				{
 					shroudSprites[j * variantStride + i] = shroud.GetSprite(i);
@@ -136,8 +136,8 @@ namespace OpenRA.Mods.Common.Traits
 				if (info.OverrideFullShroud != null)
 				{
 					var i = (j + 1) * variantStride - 1;
-					shroudSprites[i] = map.SequenceProvider.GetSequence(info.Sequence, info.OverrideFullShroud).GetSprite(0);
-					fogSprites[i] = map.SequenceProvider.GetSequence(info.Sequence, info.OverrideFullFog).GetSprite(0);
+					shroudSprites[i] = sequenceProvider.GetSequence(info.Sequence, info.OverrideFullShroud).GetSprite(0);
+					fogSprites[i] = sequenceProvider.GetSequence(info.Sequence, info.OverrideFullFog).GetSprite(0);
 				}
 			}
 
@@ -152,14 +152,14 @@ namespace OpenRA.Mods.Common.Traits
 			notVisibleEdges = info.UseExtendedIndex ? Edges.AllSides : Edges.AllCorners;
 		}
 
-		public void WorldLoaded(World w, WorldRenderer wr)
+		void IWorldLoaded.WorldLoaded(World w, WorldRenderer wr)
 		{
 			// Initialize tile cache
 			// This includes the region outside the visible area to cover any sprites peeking outside the map
 			foreach (var uv in w.Map.AllCells.MapCoords)
 			{
 				var pos = w.Map.CenterOfCell(uv.ToCPos(map));
-				var screen = wr.ScreenPosition(pos - new WVec(0, 0, pos.Z));
+				var screen = wr.Screen3DPosition(pos - new WVec(0, 0, pos.Z));
 				var variant = (byte)Game.CosmeticRandom.Next(info.ShroudVariants.Length);
 				tileInfos[uv] = new TileInfo(screen, variant);
 			}
@@ -231,7 +231,7 @@ namespace OpenRA.Mods.Common.Traits
 			cellsDirty.UnionWith(cells);
 		}
 
-		public void RenderShroud(WorldRenderer wr, Shroud shroud)
+		void IRenderShroud.RenderShroud(Shroud shroud, WorldRenderer wr)
 		{
 			if (currentShroud != shroud)
 			{
@@ -242,12 +242,12 @@ namespace OpenRA.Mods.Common.Traits
 					shroud.CellsChanged += DirtyCells;
 
 				// Needs the anonymous function to ensure the correct overload is chosen
-				if (shroud != null && shroud.ShroudEnabled)
+				if (shroud != null)
 					visibleUnderShroud = puv => currentShroud.IsExplored(puv);
 				else
 					visibleUnderShroud = puv => map.Contains(puv);
 
-				if (shroud != null && shroud.FogEnabled)
+				if (shroud != null)
 					visibleUnderFog = puv => currentShroud.IsVisible(puv);
 				else
 					visibleUnderFog = puv => map.Contains(puv);
@@ -302,8 +302,7 @@ namespace OpenRA.Mods.Common.Traits
 			return sprites[variant * variantStride + edgesToSpriteIndexOffset[(byte)edges]];
 		}
 
-		bool disposed;
-		public void Disposing(Actor self)
+		void INotifyActorDisposing.Disposing(Actor self)
 		{
 			if (disposed)
 				return;

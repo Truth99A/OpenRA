@@ -1,34 +1,40 @@
 4TNK:
-	Inherits: ^VoxelTank
+	Inherits: ^Tank
+	Inherits@VOXELS: ^VoxelActor
+	Inherits@EXPERIENCE: ^GainsExperience
+	Inherits@AUTOTARGET: ^AutoTargetAllAssaultMove
 	Valued:
 		Cost: 1700
 	Tooltip:
 		Name: Mammoth Tank
 	Mobile:
 		Speed: 56
-		ROT: 5
-		Crushes: wall, crate, infantry
+		TurnSpeed: 5
 	Health:
-		HP: 600
+		HP: 60000
 	Armor:
 		Type: Heavy
 	RevealsShroud:
 		Range: 6c0
+		MaxHeightDelta: 3
+		RequiresCondition: !inside-tunnel
 	Turreted:
-		ROT: 3
+		TurnSpeed: 3
 	Armament@PRIMARY:
 		Weapon: 120mmx
-		LocalOffset: 500,60,360, 500,-85,360
+		LocalOffset: 707,85,509, 707,-120,509
 		MuzzleSequence: muzzle
+		MuzzlePalette: effect-ignore-lighting
 	Armament@SECONDARY:
 		Weapon: MammothTusk
-		LocalOffset: 0,200,410, 0,-200,410
+		LocalOffset: 0,283,580, 0,-283,580
 	AttackTurreted:
 		Voice: Attack
-	AutoTarget:
+		PauseOnCondition: empdisable
 	SelfHealing:
-		Ticks: 10
-		HealIfBelow: 50%
+		Step: 500
+		Delay: 10
+		HealIfBelow: 50
 		DamageCooldown: 200
 	WithVoxelTurret:
 	WithVoxelBarrel:
@@ -41,13 +47,15 @@
 	Tooltip:
 		Name: Truck
 	Health:
-		HP: 200
+		HP: 20000
 	Armor:
 		Type: Light
 	Mobile:
 		Speed: 56
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 5c0
+		MaxHeightDelta: 3
 
 TRUCKA:
 	Inherits: ^TRUCK
@@ -56,20 +64,22 @@ TRUCKB:
 	Inherits: ^TRUCK
 
 ICBM:
-	Inherits: ^CivilianVoxelVehicle
+	Inherits: ^CivilianVoxelCrusher
 	Valued:
 		Cost: 1400
 	Tooltip:
 		Name: Ballistic Missile Launcher
 	Health:
-		HP: 500
+		HP: 50000
 	Armor:
 		Type: Light
 	Mobile:
 		Speed: 85
-		ROT: 5
+		TurnSpeed: 5
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 7c0
+		MaxHeightDelta: 3
 	Transforms:
 		IntoActor: gaicbm
 		Offset: -1,-1
@@ -79,26 +89,30 @@ ICBM:
 		Voice: Move
 
 BUS:
-	Inherits: ^CivilianVoxelVehicle
+	Inherits: ^CivilianVoxelCrusher
 	Valued:
 		Cost: 800
 	Tooltip:
 		Name: School Bus
 	Mobile:
-		ROT: 5
+		TurnSpeed: 5
 		Speed: 113
+		PauseOnCondition: empdisable || loading || being-captured
 	Health:
-		HP: 100
+		HP: 10000
 	Armor:
 		Type: Light
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 5c0
+		MaxHeightDelta: 3
 	Cargo:
 		Types: Infantry
 		MaxWeight: 20
 		PipCount: 5
 		UnloadVoice: Unload
-		LoadingUpgrades: notmobile
+		LoadingCondition: loading
+		EjectOnDeath: true
 
 PICK:
 	Inherits: ^CivilianVoxelVehicle
@@ -107,20 +121,24 @@ PICK:
 	Tooltip:
 		Name: Pickup
 	Mobile:
-		ROT: 5
+		TurnSpeed: 5
 		Speed: 113
+		PauseOnCondition: empdisable || loading || being-captured
 	Health:
-		HP: 100
+		HP: 10000
 	Armor:
 		Type: Light
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 5c0
+		MaxHeightDelta: 3
 	Cargo:
 		Types: Infantry
 		MaxWeight: 2
 		PipCount: 5
 		UnloadVoice: Unload
-		LoadingUpgrades: notmobile
+		LoadingCondition: loading
+		EjectOnDeath: true
 
 CAR:
 	Inherits: ^CivilianVoxelVehicle
@@ -129,20 +147,24 @@ CAR:
 	Tooltip:
 		Name: Automobile
 	Mobile:
-		ROT: 5
+		TurnSpeed: 5
 		Speed: 113
+		PauseOnCondition: empdisable || loading || being-captured
 	Health:
-		HP: 100
+		HP: 10000
 	Armor:
 		Type: Light
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 5c0
+		MaxHeightDelta: 3
 	Cargo:
 		Types: Infantry
 		MaxWeight: 4
 		PipCount: 5
 		UnloadVoice: Unload
-		LoadingUpgrades: notmobile
+		LoadingCondition: loading
+		EjectOnDeath: true
 
 WINI:
 	Inherits: ^CivilianVoxelVehicle
@@ -151,20 +173,24 @@ WINI:
 	Tooltip:
 		Name: Recreational Vehicle
 	Mobile:
-		ROT: 5
+		TurnSpeed: 5
 		Speed: 113
+		PauseOnCondition: empdisable || loading || being-captured
 	Health:
-		HP: 200
+		HP: 20000
 	Armor:
 		Type: Light
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 5c0
+		MaxHeightDelta: 3
 	Cargo:
 		Types: Infantry
 		MaxWeight: 5
 		PipCount: 5
 		UnloadVoice: Unload
-		LoadingUpgrades: notmobile
+		LoadingCondition: loading
+		EjectOnDeath: true
 
 LOCOMOTIVE:
 	Inherits: ^Train
@@ -175,6 +201,7 @@ LOCOMOTIVE:
 	Cargo:
 		MaxWeight: 2
 		PipCount: 2
+		EjectOnDeath: true
 
 TRAINCAR:
 	Inherits: ^Train
@@ -185,6 +212,7 @@ TRAINCAR:
 	Cargo:
 		MaxWeight: 10
 		PipCount: 5
+		EjectOnDeath: true
 
 CARGOCAR:
 	Inherits: ^Train
@@ -195,4 +223,4 @@ CARGOCAR:
 	Cargo:
 		MaxWeight: 10
 		PipCount: 5
-
+		EjectOnDeath: true

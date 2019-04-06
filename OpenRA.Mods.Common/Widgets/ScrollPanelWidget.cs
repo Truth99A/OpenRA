@@ -1,15 +1,15 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
-using System.Drawing;
 using System.Linq;
 using OpenRA.Graphics;
 using OpenRA.Primitives;
@@ -33,9 +33,11 @@ namespace OpenRA.Mods.Common.Widgets
 	{
 		readonly Ruleset modRules;
 		public int ScrollbarWidth = 24;
+		public int BorderWidth = 1;
 		public int TopBottomSpacing = 2;
 		public int ItemSpacing = 0;
 		public int ButtonDepth = ChromeMetrics.Get<int>("ButtonDepth");
+		public string ClickSound = ChromeMetrics.Get<string>("ClickSound");
 		public string Background = "scrollpanel-bg";
 		public string Button = "scrollpanel-button";
 		public int ContentHeight;
@@ -43,6 +45,8 @@ namespace OpenRA.Mods.Common.Widgets
 		public int MinimumThumbSize = 10;
 		public ScrollPanelAlign Align = ScrollPanelAlign.Top;
 		public bool CollapseHiddenChildren;
+
+		// Fraction of the remaining scroll-delta to move in 40ms
 		public float SmoothScrollSpeed = 0.333f;
 
 		protected bool upPressed;
@@ -61,6 +65,10 @@ namespace OpenRA.Mods.Common.Widgets
 
 		// The current value is the actual list offset at the moment
 		float currentListOffset;
+
+		// The Game.Runtime value when UpdateSmoothScrolling was last called
+		// Used for calculating the per-frame smooth-scrolling delta
+		long lastSmoothScrollTime = 0;
 
 		// Setting "smooth" to true will only update the target list offset.
 		// Setting "smooth" to false will also set the current list offset,
@@ -85,9 +93,9 @@ namespace OpenRA.Mods.Common.Widgets
 		}
 
 		[ObjectCreator.UseCtor]
-		public ScrollPanelWidget(Ruleset modRules)
+		public ScrollPanelWidget(ModData modData)
 		{
-			this.modRules = modRules;
+			this.modRules = modData.DefaultRules;
 
 			Layout = new ListLayout(this);
 		}
@@ -125,6 +133,8 @@ namespace OpenRA.Mods.Common.Widgets
 		{
 			if (!IsVisible())
 				return;
+
+			UpdateSmoothScrolling();
 
 			var rb = RenderBounds;
 
@@ -164,10 +174,14 @@ namespace OpenRA.Mods.Common.Widgets
 			WidgetUtils.DrawRGBA(ChromeProvider.GetImage("scrollbar", downPressed || downDisabled ? "down_pressed" : "down_arrow"),
 				new float2(downButtonRect.Left + downOffset, downButtonRect.Top + downOffset));
 
-			var drawBounds = backgroundRect.InflateBy(-1, -1, -1, -1);
+			var drawBounds = backgroundRect.InflateBy(-BorderWidth, -BorderWidth, -BorderWidth, -BorderWidth);
 			Game.Renderer.EnableScissor(drawBounds);
 
-			drawBounds.Offset((-ChildOrigin).ToPoint());
+			// ChildOrigin enumerates the widget tree, so only evaluate it once
+			var co = ChildOrigin;
+			drawBounds.X -= co.X;
+			drawBounds.Y -= co.Y;
+
 			foreach (var child in Children)
 				if (child.Bounds.IntersectsWith(drawBounds))
 					child.DrawOuter();
@@ -250,6 +264,29 @@ namespace OpenRA.Mods.Common.Widgets
 				ScrollToItem(item);
 		}
 
+		void UpdateSmoothScrolling()
+		{
+			if (lastSmoothScrollTime == 0)
+			{
+				lastSmoothScrollTime = Game.RunTime;
+				return;
+			}
+
+			var offsetDiff = targetListOffset - currentListOffset;
+			var absOffsetDiff = Math.Abs(offsetDiff);
+			if (absOffsetDiff > 1f)
+			{
+				var dt = Game.RunTime - lastSmoothScrollTime;
+				currentListOffset += offsetDiff * SmoothScrollSpeed.Clamp(0.1f, 1.0f) * dt / 40;
+
+				Ui.ResetTooltips();
+			}
+			else
+				SetListOffset(targetListOffset, false);
+
+			lastSmoothScrollTime = Game.RunTime;
+		}
+
 		public override void Tick()
 		{
 			if (upPressed)
@@ -257,17 +294,6 @@ namespace OpenRA.Mods.Common.Widgets
 
 			if (downPressed)
 				Scroll(-1);
-
-			var offsetDiff = targetListOffset - currentListOffset;
-			var absOffsetDiff = Math.Abs(offsetDiff);
-			if (absOffsetDiff > 1f)
-			{
-				currentListOffset += offsetDiff * SmoothScrollSpeed.Clamp(0.1f, 1.0f);
-
-				Ui.ResetTooltips();
-			}
-			else
-				SetListOffset(targetListOffset, false);
 		}
 
 		public override bool YieldMouseFocus(MouseInput mi)
@@ -321,7 +347,7 @@ namespace OpenRA.Mods.Common.Widgets
 					lastMouseLocation = mi.Location;
 
 				if (mi.Event == MouseInputEvent.Down && ((upPressed && !upDisabled) || (downPressed && !downDisabled) || thumbPressed))
-					Game.Sound.PlayNotification(modRules, null, "Sounds", "ClickSound", null);
+					Game.Sound.PlayNotification(modRules, null, "Sounds", ClickSound, null);
 			}
 
 			return upPressed || downPressed || thumbPressed;
@@ -372,13 +398,22 @@ namespace OpenRA.Mods.Common.Widgets
 			});
 		}
 
-		void BindingAdd(object item)
+		void BindingAdd(IObservableCollection col, object item)
 		{
-			Game.RunAfterTick(() => BindingAddImpl(item));
+			Game.RunAfterTick(() =>
+			{
+				if (collection != col)
+					return;
+
+				BindingAddImpl(item);
+			});
 		}
 
 		void BindingAddImpl(object item)
 		{
+			if (makeWidget == null)
+				return;
+
 			var widget = makeWidget(item);
 			var scrollToBottom = autoScroll && ScrolledToBottom;
 
@@ -388,30 +423,40 @@ namespace OpenRA.Mods.Common.Widgets
 				ScrollToBottom();
 		}
 
-		void BindingRemove(object item)
+		void BindingRemove(IObservableCollection col, object item)
 		{
 			Game.RunAfterTick(() =>
 			{
+				if (collection != col)
+					return;
+
 				var widget = Children.FirstOrDefault(w => widgetItemEquals(w, item));
 				if (widget != null)
 					RemoveChild(widget);
 			});
 		}
 
-		void BindingRemoveAt(int index)
+		void BindingRemoveAt(IObservableCollection col, int index)
 		{
 			Game.RunAfterTick(() =>
 			{
+				if (collection != col)
+					return;
+
 				if (index < 0 || index >= Children.Count)
 					return;
+
 				RemoveChild(Children[index]);
 			});
 		}
 
-		void BindingSet(object oldItem, object newItem)
+		void BindingSet(IObservableCollection col, object oldItem, object newItem)
 		{
 			Game.RunAfterTick(() =>
 			{
+				if (collection != col)
+					return;
+
 				var newWidget = makeWidget(newItem);
 				newWidget.Parent = this;
 
@@ -428,10 +473,13 @@ namespace OpenRA.Mods.Common.Widgets
 			});
 		}
 
-		void BindingRefresh()
+		void BindingRefresh(IObservableCollection col)
 		{
 			Game.RunAfterTick(() =>
 			{
+				if (collection != col)
+					return;
+
 				RemoveChildren();
 				foreach (var item in collection.ObservedItems)
 					BindingAddImpl(item);

@@ -1,21 +1,23 @@
 #region Copyright & License Information
 /*
-* Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
-* This file is part of OpenRA, which is free software. It is made
-* available to you under the terms of the GNU General Public License
-* as published by the Free Software Foundation. For more information,
-* see COPYING.
-*/
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+ * This file is part of OpenRA, which is free software. It is made
+ * available to you under the terms of the GNU General Public License
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
+ */
 #endregion
 
 using System;
 using System.Linq;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.D2k.Traits
 {
-	class SandwormInfo : WandersInfo, Requires<MobileInfo>, Requires<WithSpriteBodyInfo>, Requires<AttackBaseInfo>
+	class SandwormInfo : WandersInfo, Requires<MobileInfo>, Requires<AttackBaseInfo>
 	{
 		[Desc("Time between rescanning for targets (in ticks).")]
 		public readonly int TargetRescanInterval = 125;
@@ -29,25 +31,15 @@ namespace OpenRA.Mods.D2k.Traits
 		[Desc("The chance this actor has of disappearing after it attacks (in %).")]
 		public readonly int ChanceToDisappear = 100;
 
-		[Desc("Name of the sequence that is used when the actor is idle or moving (not attacking).")]
-		[SequenceReference] public readonly string IdleSequence = "idle";
-
-		[Desc("Name of the sequence that is used when the actor is attacking.")]
-		[SequenceReference] public readonly string MouthSequence = "mouth";
-
-		[Desc("Name of the sequence that is used when the actor is burrowed.")]
-		[SequenceReference] public readonly string BurrowedSequence = "burrowed";
-
 		public override object Create(ActorInitializer init) { return new Sandworm(init.Self, this); }
 	}
 
 	class Sandworm : Wanders, ITick, INotifyActorDisposing
 	{
-		public readonly SandwormInfo Info;
+		public readonly SandwormInfo WormInfo;
 
-		readonly WormManager manager;
+		readonly ActorSpawnManager manager;
 		readonly Mobile mobile;
-		readonly WithSpriteBody withSpriteBody;
 		readonly AttackBase attackTrait;
 
 		public bool IsMovingTowardTarget { get; private set; }
@@ -55,23 +47,15 @@ namespace OpenRA.Mods.D2k.Traits
 		public bool IsAttacking;
 
 		int targetCountdown;
+		bool disposed;
 
 		public Sandworm(Actor self, SandwormInfo info)
 			: base(self, info)
 		{
-			Info = info;
+			WormInfo = info;
 			mobile = self.Trait<Mobile>();
-			withSpriteBody = self.Trait<WithSpriteBody>();
 			attackTrait = self.Trait<AttackBase>();
-			manager = self.World.WorldActor.Trait<WormManager>();
-		}
-
-		public override void OnBecomingIdle(Actor self)
-		{
-			if (withSpriteBody.DefaultAnimation.CurrentSequence.Name != Info.IdleSequence)
-				withSpriteBody.DefaultAnimation.PlayRepeating(Info.IdleSequence);
-
-			base.OnBecomingIdle(self);
+			manager = self.World.WorldActor.Trait<ActorSpawnManager>();
 		}
 
 		public override void DoAction(Actor self, CPos targetCell)
@@ -83,10 +67,10 @@ namespace OpenRA.Mods.D2k.Traits
 			if (IsMovingTowardTarget)
 				return;
 
-			self.QueueActivity(mobile.MoveWithinRange(Target.FromCell(self.World, targetCell, SubCell.Any), WDist.FromCells(1)));
+			self.QueueActivity(mobile.MoveWithinRange(Target.FromCell(self.World, targetCell, SubCell.Any), WDist.FromCells(1), targetLineColor: Color.Red));
 		}
 
-		public void Tick(Actor self)
+		void ITick.Tick(Actor self)
 		{
 			if (--targetCountdown > 0 || IsAttacking || !self.IsInWorld)
 				return;
@@ -96,15 +80,16 @@ namespace OpenRA.Mods.D2k.Traits
 
 		void RescanForTargets(Actor self)
 		{
-			targetCountdown = Info.TargetRescanInterval;
+			targetCountdown = WormInfo.TargetRescanInterval;
 
 			// If close enough, we don't care about other actors.
-			var target = self.World.FindActorsInCircle(self.CenterPosition, Info.IgnoreNoiseAttackRange)
-				.FirstOrDefault(x => attackTrait.HasAnyValidWeapons(Target.FromActor(x)));
-			if (target != null)
+			var target = self.World.FindActorsInCircle(self.CenterPosition, WormInfo.IgnoreNoiseAttackRange)
+				.Select(t => Target.FromActor(t))
+				.FirstOrDefault(t => attackTrait.HasAnyValidWeapons(t));
+
+			if (target.Type == TargetType.Actor)
 			{
-				self.CancelActivity();
-				attackTrait.ResolveOrder(self, new Order("Attack", target, true) { TargetActor = target });
+				attackTrait.AttackTarget(target, false, true, false);
 				return;
 			}
 
@@ -116,7 +101,7 @@ namespace OpenRA.Mods.D2k.Traits
 				return mobile.CanEnterCell(a.Location, null, false);
 			};
 
-			var actorsInRange = self.World.FindActorsInCircle(self.CenterPosition, Info.MaxSearchRadius)
+			var actorsInRange = self.World.FindActorsInCircle(self.CenterPosition, WormInfo.MaxSearchRadius)
 				.Where(isValidTarget).SelectMany(a => a.TraitsImplementing<AttractsWorms>());
 
 			var noiseDirection = actorsInRange.Aggregate(WVec.Zero, (a, b) => a + b.AttractionAtPosition(self.CenterPosition));
@@ -129,6 +114,13 @@ namespace OpenRA.Mods.D2k.Traits
 
 			while (!self.World.Map.Contains(moveTo) || !mobile.CanEnterCell(moveTo, null, false))
 			{
+				// without this check, this while can be infinity loop
+				if (moveTo == self.Location)
+				{
+					self.CancelActivity();
+					return;
+				}
+
 				noiseDirection /= 2;
 				moveTo = self.World.Map.CellContaining(self.CenterPosition + noiseDirection);
 			}
@@ -144,13 +136,12 @@ namespace OpenRA.Mods.D2k.Traits
 			IsMovingTowardTarget = true;
 		}
 
-		bool disposed;
-		public void Disposing(Actor self)
+		void INotifyActorDisposing.Disposing(Actor self)
 		{
 			if (disposed)
 				return;
 
-			manager.DecreaseWormCount();
+			manager.DecreaseActorCount();
 			disposed = true;
 		}
 	}

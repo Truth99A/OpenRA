@@ -1,17 +1,18 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
-using System.Drawing;
-using OpenRA.FileFormats;
 using OpenRA.Graphics;
+using OpenRA.Mods.Common.FileFormats;
+using OpenRA.Primitives;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets
@@ -37,19 +38,11 @@ namespace OpenRA.Mods.Common.Widgets
 
 		Action onComplete;
 
-		readonly World world;
-
-		[ObjectCreator.UseCtor]
-		public VqaPlayerWidget(World world)
-		{
-			this.world = world;
-		}
-
 		public void Load(string filename)
 		{
 			if (filename == cachedVideo)
 				return;
-			var video = new VqaReader(Game.ModData.ModFiles.Open(filename));
+			var video = new VqaReader(Game.ModData.DefaultFileSystem.Open(filename));
 
 			cachedVideo = filename;
 			Open(video);
@@ -79,7 +72,7 @@ namespace OpenRA.Mods.Common.Widgets
 					0,
 					video.Width,
 					video.Height),
-				TextureChannel.Alpha);
+				TextureChannel.RGBA);
 
 			var scale = Math.Min((float)RenderBounds.Width / video.Width, (float)RenderBounds.Height / video.Height * AspectRatio);
 			videoOrigin = new float2(
@@ -100,7 +93,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 			var overlaySheet = new Sheet(SheetType.BGRA, new Size(1, Exts.NextPowerOf2(scaledHeight)));
 			overlaySheet.GetTexture().SetData(overlay);
-			overlaySprite = new Sprite(overlaySheet, new Rectangle(0, 0, 1, scaledHeight), TextureChannel.Alpha);
+			overlaySprite = new Sprite(overlaySheet, new Rectangle(0, 0, 1, scaledHeight), TextureChannel.RGBA);
 		}
 
 		public override void Draw()
@@ -201,7 +194,7 @@ namespace OpenRA.Mods.Common.Widgets
 			Game.Sound.StopVideo();
 			video.Reset();
 			videoSprite.Sheet.GetTexture().SetData(video.FrameData);
-			world.AddFrameEndTask(_ => onComplete());
+			Game.RunAfterTick(onComplete);
 		}
 
 		public void CloseVideo()

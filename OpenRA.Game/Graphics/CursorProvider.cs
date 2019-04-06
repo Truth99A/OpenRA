@@ -1,16 +1,18 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OpenRA.Traits;
 
 namespace OpenRA.Graphics
 {
@@ -21,29 +23,24 @@ namespace OpenRA.Graphics
 
 		public CursorProvider(ModData modData)
 		{
-			var sequenceFiles = modData.Manifest.Cursors;
-			var partial = sequenceFiles
-				.Select(s => MiniYaml.FromFile(s))
-				.Aggregate(MiniYaml.MergePartial);
+			var fileSystem = modData.DefaultFileSystem;
+			var sequenceYaml = MiniYaml.Merge(modData.Manifest.Cursors.Select(
+				s => MiniYaml.FromStream(fileSystem.Open(s), s)));
 
-			var sequences = new MiniYaml(null, MiniYaml.ApplyRemovals(partial));
-			var shadowIndex = new int[] { };
+			var nodesDict = new MiniYaml(null, sequenceYaml).ToDictionary();
 
-			var nodesDict = sequences.ToDictionary();
-			if (nodesDict.ContainsKey("ShadowIndex"))
-			{
-				Array.Resize(ref shadowIndex, shadowIndex.Length + 1);
-				Exts.TryParseIntegerInvariant(nodesDict["ShadowIndex"].Value,
-					out shadowIndex[shadowIndex.Length - 1]);
-			}
+			// Overwrite previous definitions if there are duplicates
+			var pals = new Dictionary<string, IProvidesCursorPaletteInfo>();
+			foreach (var p in modData.DefaultRules.Actors["world"].TraitInfos<IProvidesCursorPaletteInfo>())
+				if (p.Palette != null)
+					pals[p.Palette] = p;
 
-			var palettes = new Dictionary<string, ImmutablePalette>();
-			foreach (var p in nodesDict["Palettes"].Nodes)
-				palettes.Add(p.Key, new ImmutablePalette(modData.ModFiles.Open(p.Value.Value), shadowIndex));
+			Palettes = nodesDict["Cursors"].Nodes.Select(n => n.Value.Value)
+				.Distinct()
+				.ToDictionary(p => p, p => pals[p].ReadPalette(modData.DefaultFileSystem))
+				.AsReadOnly();
 
-			Palettes = palettes.AsReadOnly();
-
-			var frameCache = new FrameCache(modData.SpriteLoaders);
+			var frameCache = new FrameCache(fileSystem, modData.SpriteLoaders);
 			var cursors = new Dictionary<string, CursorSequence>();
 			foreach (var s in nodesDict["Cursors"].Nodes)
 				foreach (var sequence in s.Value.Nodes)

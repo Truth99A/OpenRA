@@ -1,37 +1,47 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
-using OpenRA.Mods.Common.Orders;
+using OpenRA.Mods.Common.Lint;
 using OpenRA.Mods.Common.Traits;
-using OpenRA.Mods.Common.Widgets;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets.Logic
 {
+	[ChromeLogicArgsHotkeys("StatisticsBasicKey", "StatisticsEconomyKey", "StatisticsProductionKey", "StatisticsCombatKey", "StatisticsGraphKey", "StatisticsArmyGraphKey")]
 	public class MenuButtonsChromeLogic : ChromeLogic
 	{
 		readonly World world;
 		readonly Widget worldRoot;
 		readonly Widget menuRoot;
+		readonly string clickSound = ChromeMetrics.Get<string>("ClickSound");
+
 		bool disableSystemButtons;
 		Widget currentWidget;
 
 		[ObjectCreator.UseCtor]
-		public MenuButtonsChromeLogic(Widget widget, World world)
+		public MenuButtonsChromeLogic(Widget widget, ModData modData, World world, Dictionary<string, MiniYaml> logicArgs)
 		{
 			this.world = world;
 
 			worldRoot = Ui.Root.Get("WORLD_ROOT");
 			menuRoot = Ui.Root.Get("MENU_ROOT");
+
+			MiniYaml yaml;
+			string[] keyNames = Enum.GetNames(typeof(ObserverStatsPanel));
+			var statsHotkeys = new HotkeyReference[keyNames.Length];
+			for (var i = 0; i < keyNames.Length; i++)
+				statsHotkeys[i] = logicArgs.TryGetValue("Statistics" + keyNames[i] + "Key", out yaml) ? modData.Hotkeys[yaml.Value] : new HotkeyReference();
 
 			// System buttons
 			var options = widget.GetOrNull<MenuButtonWidget>("OPTIONS_BUTTON");
@@ -65,18 +75,15 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				}
 			}
 
-			var diplomacy = widget.GetOrNull<MenuButtonWidget>("DIPLOMACY_BUTTON");
-			if (diplomacy != null)
-			{
-				diplomacy.Visible = !world.Map.Visibility.HasFlag(MapVisibility.MissionSelector) && world.Players.Any(a => a != world.LocalPlayer && !a.NonCombatant);
-				diplomacy.IsDisabled = () => disableSystemButtons;
-				diplomacy.OnClick = () => OpenMenuPanel(diplomacy);
-			}
-
 			var debug = widget.GetOrNull<MenuButtonWidget>("DEBUG_BUTTON");
 			if (debug != null)
 			{
-				debug.IsVisible = () => world.LobbyInfo.GlobalSettings.AllowCheats;
+				// Can't use DeveloperMode.Enabled because there is a hardcoded hack to *always*
+				// enable developer mode for singleplayer games, but we only want to show the button
+				// if it has been explicitly enabled
+				var def = world.Map.Rules.Actors["player"].TraitInfo<DeveloperModeInfo>().CheckboxEnabled;
+				var enabled = world.LobbyInfo.GlobalSettings.OptionOrDefault("cheats", def);
+				debug.IsVisible = () => enabled;
 				debug.IsDisabled = () => disableSystemButtons;
 				debug.OnClick = () => OpenMenuPanel(debug, new WidgetArgs()
 				{
@@ -88,8 +95,33 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			if (stats != null)
 			{
 				stats.IsDisabled = () => disableSystemButtons || world.Map.Visibility.HasFlag(MapVisibility.MissionSelector);
-				stats.OnClick = () => OpenMenuPanel(stats);
+				stats.OnClick = () => OpenMenuPanel(stats, new WidgetArgs() { { "activePanel", ObserverStatsPanel.Basic } });
 			}
+
+			var keyListener = widget.GetOrNull<LogicKeyListenerWidget>("OBSERVER_KEY_LISTENER");
+			if (keyListener != null)
+			{
+				keyListener.AddHandler(e =>
+				{
+					if (e.Event == KeyInputEvent.Down && !e.IsRepeat)
+					{
+						for (var i = 0; i < statsHotkeys.Length; i++)
+						{
+							if (statsHotkeys[i].IsActivatedBy(e))
+							{
+								Game.Sound.PlayNotification(modData.DefaultRules, null, "Sounds", clickSound, null);
+								OpenMenuPanel(stats, new WidgetArgs() { { "activePanel", i } });
+								return true;
+							}
+						}
+					}
+
+					return false;
+				});
+			}
+
+			if (logicArgs.TryGetValue("ClickSound", out yaml))
+				clickSound = yaml.Value;
 		}
 
 		void OpenMenuPanel(MenuButtonWidget button, WidgetArgs widgetArgs = null)
@@ -98,10 +130,19 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			var cachedPause = world.PredictedPaused;
 
 			if (button.HideIngameUI)
-				worldRoot.IsVisible = () => false;
+			{
+				// Cancel custom input modes (guard, building placement, etc)
+				world.CancelInputMode();
 
-			if (button.Pause && world.LobbyInfo.IsSinglePlayer)
+				worldRoot.IsVisible = () => false;
+			}
+
+			if (button.Pause && world.LobbyInfo.NonBotClients.Count() == 1)
 				world.SetPauseState(true);
+
+			var cachedDisableWorldSounds = Game.Sound.DisableWorldSounds;
+			if (button.DisableWorldSounds)
+				Game.Sound.DisableWorldSounds = true;
 
 			widgetArgs = widgetArgs ?? new WidgetArgs();
 			widgetArgs.Add("onExit", () =>
@@ -109,7 +150,10 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				if (button.HideIngameUI)
 					worldRoot.IsVisible = () => true;
 
-				if (button.Pause && world.LobbyInfo.IsSinglePlayer)
+				if (button.DisableWorldSounds)
+					Game.Sound.DisableWorldSounds = cachedDisableWorldSounds;
+
+				if (button.Pause && world.LobbyInfo.NonBotClients.Count() == 1)
 					world.SetPauseState(cachedPause);
 
 				menuRoot.RemoveChild(currentWidget);
@@ -117,6 +161,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			});
 
 			currentWidget = Game.LoadWidget(world, button.MenuContainer, menuRoot, widgetArgs);
+			Game.RunAfterTick(Ui.ResetTooltips);
 		}
 	}
 }

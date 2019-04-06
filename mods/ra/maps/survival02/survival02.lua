@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 FrenchSquad = { "2tnk", "2tnk", "mcv" }
 
 TimerTicks = DateTime.Minutes(10)
@@ -378,18 +386,13 @@ SetupSoviets = function()
 	end)
 
 	Trigger.AfterDelay(0, function()
-		local buildings = Map.ActorsInBox(Map.TopLeft, Map.BottomRight, function(self) return self.Owner == soviets and self.HasProperty("StartBuildingRepairs") end)
+		local buildings = Utils.Where(Map.ActorsInWorld, function(self) return self.Owner == soviets and self.HasProperty("StartBuildingRepairs") end)
 		Utils.Do(buildings, function(actor)
 			Trigger.OnDamaged(actor, function(building)
 				if building.Owner == soviets and building.Health < building.MaxHealth * 3/4 then
 					building.StartBuildingRepairs()
 				end
 			end)
-		end)
-
-		local units = Map.ActorsInBox(Map.TopLeft, Map.BottomRight, function(self) return self.Owner == soviets and self.HasProperty("AutoTarget") end)
-		Utils.Do(units, function(unit)
-			unit.Stance = "Defend"
 		end)
 	end)
 end

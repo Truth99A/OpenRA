@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -20,7 +21,7 @@ namespace OpenRA.Primitives
 	{
 		readonly List<DelayedAction> actions = new List<DelayedAction>();
 
-		public void Add(Action a, int desiredTime)
+		public void Add(Action a, long desiredTime)
 		{
 			if (a == null)
 				throw new ArgumentNullException("a");
@@ -33,7 +34,7 @@ namespace OpenRA.Primitives
 			}
 		}
 
-		public void PerformActions(int currentTime)
+		public void PerformActions(long currentTime)
 		{
 			DelayedAction[] pendingActions;
 			lock (actions)
@@ -66,10 +67,10 @@ namespace OpenRA.Primitives
 
 	struct DelayedAction : IComparable<DelayedAction>
 	{
-		public readonly int Time;
+		public readonly long Time;
 		public readonly Action Action;
 
-		public DelayedAction(Action action, int time)
+		public DelayedAction(Action action, long time)
 		{
 			Action = action;
 			Time = time;

@@ -1,10 +1,8 @@
-MapFormat: 8
+MapFormat: 11
 
 RequiresMod: cnc
 
 Title: The Hot Box
-
-Description: Drop Zone for CnC
 
 Author: Dan9550
 
@@ -16,19 +14,7 @@ Bounds: 16,16,36,36
 
 Visibility: Lobby
 
-Type: Drop Zone
-
-Videos:
-
-Options:
-	Crates: True
-	Fog: False
-	Shroud: False
-	AllyBuildRadius: False
-	FragileAlliances: False
-	StartingCash: 5000
-	TechLevel: Unrestricted
-	ConfigurableStartingUnits: False
+Categories: Drop Zone
 
 Players:
 	PlayerReference@Neutral:
@@ -38,71 +24,71 @@ Players:
 		Faction: gdi
 	PlayerReference@Multi0:
 		Name: Multi0
-		Playable: True
 		AllowBots: False
+		Playable: True
 		LockFaction: True
 		Faction: nod
 		Enemies: Creeps
 	PlayerReference@Multi1:
 		Name: Multi1
-		Playable: True
 		AllowBots: False
+		Playable: True
 		LockFaction: True
 		Faction: nod
 		Enemies: Creeps
 	PlayerReference@Multi2:
 		Name: Multi2
-		Playable: True
 		AllowBots: False
+		Playable: True
 		LockFaction: True
 		Faction: nod
 		Enemies: Creeps
 	PlayerReference@Multi3:
 		Name: Multi3
-		Playable: True
 		AllowBots: False
+		Playable: True
 		LockFaction: True
 		Faction: nod
 		Enemies: Creeps
 	PlayerReference@Multi4:
 		Name: Multi4
-		Playable: True
 		AllowBots: False
+		Playable: True
 		LockFaction: True
 		Faction: nod
 		Enemies: Creeps
 	PlayerReference@Multi5:
 		Name: Multi5
-		Playable: True
 		AllowBots: False
+		Playable: True
 		LockFaction: True
 		Faction: nod
 		Enemies: Creeps
 	PlayerReference@Multi6:
 		Name: Multi6
-		Playable: True
 		AllowBots: False
+		Playable: True
 		LockFaction: True
 		Faction: nod
 		Enemies: Creeps
 	PlayerReference@Multi7:
 		Name: Multi7
-		Playable: True
 		AllowBots: False
+		Playable: True
 		LockFaction: True
 		Faction: nod
 		Enemies: Creeps
 	PlayerReference@Multi8:
 		Name: Multi8
-		Playable: True
 		AllowBots: False
+		Playable: True
 		LockFaction: True
 		Faction: nod
 		Enemies: Creeps
 	PlayerReference@Multi9:
 		Name: Multi9
-		Playable: True
 		AllowBots: False
+		Playable: True
 		LockFaction: True
 		Faction: nod
 		Enemies: Creeps
@@ -155,9 +141,6 @@ Actors:
 	Actor13: v35
 		Location: 29,39
 		Owner: Neutral
-	Actor14: v36
-		Location: 38,35
-		Owner: Neutral
 	Actor15: v23
 		Location: 46,39
 		Owner: Neutral
@@ -206,53 +189,11 @@ Actors:
 	Actor30: mpspawn
 		Location: 46,22
 		Owner: Neutral
+	Actor36: v35
+		Owner: Neutral
+		Location: 39,35
+	Actor37: v24
+		Owner: Neutral
+		Location: 39,36
 
-Smudges:
-
-Rules:
-	World:
-		CrateSpawner:
-			Maximum: 4
-			SpawnInterval: 125
-			CrateActors: unitcrate
-		-SpawnMPUnits:
-		-MPStartLocations:
-	UNITCRATE:
-		Inherits: ^Crate
-		GiveUnitCrateAction@stnk:
-			SelectionShares: 4
-			Units: stnk
-		GiveUnitCrateAction@bike:
-			SelectionShares: 6
-			Units: bike
-		GiveUnitCrateAction@htnk:
-			SelectionShares: 1
-			Units: htnk
-		GiveUnitCrateAction@e5:
-			SelectionShares: 1
-			Units: e5
-		GiveUnitCrateAction@e1:
-			SelectionShares: 1
-			Units: e1
-	APC:
-		Health:
-			HP: 1000
-		RevealsShroud:
-			Range: 40c0
-		MustBeDestroyed:
-			RequiredForShortGame: true
-		-AttackMove:
-
-Sequences:
-
-VoxelSequences:
-
-Weapons:
-
-Voices:
-
-Music:
-
-Notifications:
-
-Translations:
+Rules: rules.yaml

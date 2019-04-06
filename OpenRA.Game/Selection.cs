@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -18,14 +19,58 @@ namespace OpenRA
 {
 	public class Selection
 	{
+		public int Hash { get; private set; }
+		public IEnumerable<Actor> Actors { get { return actors; } }
+
 		readonly HashSet<Actor> actors = new HashSet<Actor>();
-		public void Add(World w, Actor a)
+		readonly INotifySelection[] worldNotifySelection;
+
+		internal Selection(IEnumerable<INotifySelection> worldNotifySelection)
+		{
+			this.worldNotifySelection = worldNotifySelection.ToArray();
+		}
+
+		void UpdateHash()
+		{
+			// Not a real hash, but things checking this only care about checking when the selection has changed
+			// For this purpose, having a false positive (forcing a refresh when nothing changed) is much better
+			// than a false negative (selection state mismatch)
+			Hash += 1;
+		}
+
+		public void Add(Actor a)
 		{
 			actors.Add(a);
+			UpdateHash();
+
 			foreach (var sel in a.TraitsImplementing<INotifySelected>())
 				sel.Selected(a);
-			foreach (var ns in w.WorldActor.TraitsImplementing<INotifySelection>())
+
+			foreach (var ns in worldNotifySelection)
 				ns.SelectionChanged();
+		}
+
+		public void Remove(Actor a)
+		{
+			if (actors.Remove(a))
+			{
+				UpdateHash();
+				foreach (var ns in worldNotifySelection)
+					ns.SelectionChanged();
+			}
+		}
+
+		internal void OnOwnerChanged(Actor a, Player oldOwner, Player newOwner)
+		{
+			if (!actors.Contains(a))
+				return;
+
+			// Remove the actor from the original owners selection
+			// Call UpdateHash directly for everyone else so watchers can account for the owner change if needed
+			if (oldOwner == a.World.LocalPlayer)
+				Remove(a);
+			else
+				UpdateHash();
 		}
 
 		public bool Contains(Actor a)
@@ -57,11 +102,13 @@ namespace OpenRA
 				}
 			}
 
+			UpdateHash();
+
 			foreach (var a in newSelection)
 				foreach (var sel in a.TraitsImplementing<INotifySelected>())
 					sel.Selected(a);
 
-			foreach (var ns in world.WorldActor.TraitsImplementing<INotifySelection>())
+			foreach (var ns in worldNotifySelection)
 				ns.SelectionChanged();
 
 			if (world.IsGameOver)
@@ -84,12 +131,17 @@ namespace OpenRA
 			}
 		}
 
-		public IEnumerable<Actor> Actors { get { return actors; } }
-		public void Clear() { actors.Clear(); }
+		public void Clear()
+		{
+			actors.Clear();
+			UpdateHash();
+		}
 
 		public void Tick(World world)
 		{
-			actors.RemoveWhere(a => !a.IsInWorld || (!a.Owner.IsAlliedWith(world.RenderPlayer) && world.FogObscures(a)));
+			var removed = actors.RemoveWhere(a => !a.IsInWorld || (!a.Owner.IsAlliedWith(world.RenderPlayer) && world.FogObscures(a)));
+			if (removed > 0)
+				UpdateHash();
 
 			foreach (var cg in controlGroups.Values)
 			{
@@ -133,6 +185,13 @@ namespace OpenRA
 		{
 			if (!controlGroups[group].Contains(a))
 				controlGroups[group].Add(a);
+		}
+
+		public void RemoveFromControlGroup(Actor a)
+		{
+			var group = GetControlGroupForActor(a);
+			if (group.HasValue)
+				controlGroups[group.Value].Remove(a);
 		}
 
 		public int? GetControlGroupForActor(Actor a)

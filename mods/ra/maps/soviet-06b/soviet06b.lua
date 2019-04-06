@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 IntroAttackers = { IntroEnemy1, IntroEnemy2, IntroEnemy3 }
 Trucks = { Truck1, Truck2 }
 InfAttack = { }
@@ -18,13 +26,16 @@ Trigger.OnEnteredFootprint(TruckGoalTrigger, function(a, id)
 	if not truckGoalTrigger and a.Owner == player and a.Type == "truk" then
 		truckGoalTrigger = true
 		player.MarkCompletedObjective(sovietObjective)
+		player.MarkCompletedObjective(SaveAllTrucks)
 	end
 end)
 
 Trigger.OnAllKilled(Trucks, function()
-	if not controlCenterTrigger then
-		enemy.MarkCompletedObjective(alliedObjective)
-	end
+	enemy.MarkCompletedObjective(alliedObjective)
+end)
+
+Trigger.OnAnyKilled(Trucks, function()
+	player.MarkFailedObjective(SaveAllTrucks)
 end)
 
 Trigger.OnKilled(Apwr, function(building)
@@ -47,9 +58,11 @@ Trigger.OnKilled(Apwr2, function(building)
 	BaseApwr2.exists = false
 end)
 
-Trigger.OnKilled(Dome, function()
-	player.MarkCompletedObjective(sovietObjective2)
-	Media.PlaySpeechNotification(player, "ObjectiveMet")
+Trigger.OnKilledOrCaptured(Dome, function()
+	Trigger.AfterDelay(DateTime.Seconds(2), function()
+		player.MarkCompletedObjective(sovietObjective2)
+		Media.PlaySpeechNotification(player, "ObjectiveMet")
+	end)
 end)
 
 Trigger.OnRemovedFromWorld(Mcv, function()
@@ -99,7 +112,8 @@ WorldLoaded = function()
 	end)
 	alliedObjective = enemy.AddPrimaryObjective("Destroy all Soviet troops.")
 	sovietObjective = player.AddPrimaryObjective("Escort the Convoy.")
-	sovietObjective2 = player.AddSecondaryObjective("Destroy the Allied radar dome to stop enemy\nreinforcements.")
+	sovietObjective2 = player.AddSecondaryObjective("Destroy or capture the Allied radar dome to stop\nenemy reinforcements.")
+	SaveAllTrucks = player.AddSecondaryObjective("Keep all trucks alive.")
 end
 
 Tick = function()

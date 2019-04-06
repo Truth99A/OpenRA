@@ -1,51 +1,66 @@
 E3:
 	Inherits: ^Soldier
+	Inherits@EXPERIENCE: ^GainsExperience
+	Inherits@EXPHOSPITAL: ^InfantryExperienceHospitalOverrides
+	Inherits@AUTOTARGET: ^AutoTargetAllAssaultMove
 	Buildable:
 		Queue: Infantry
-		BuildPaletteOrder: 20
-		Prerequisites: ~nahand
+		BuildPaletteOrder: 30
+		Prerequisites: ~nahand, ~techlevel.low
+		Description: Anti-tank infantry.\n  Strong vs Vehicles, Aircraft, Buildings\n  Weak vs Infantry
 	Valued:
 		Cost: 250
 	Tooltip:
 		Name: Rocket Infantry
-		Description: Anti-tank infantry.\n  Strong vs Vehicles, Aircraft, Buildings\n  Weak vs Infantry
+	UpdatesPlayerStatistics:
+		AddToArmyValue: true
 	Voiced:
 		VoiceSet: Rocket
 	Health:
-		HP: 100
+		HP: 10000
 	Mobile:
-		Speed: 42
+		Speed: 56
 	Armament@PRIMARY:
 		Weapon: Bazooka
-		LocalOffset: 128,0,640
+		LocalOffset: 356,0,967
+	TakeCover:
+		ProneOffset: 52,64,-652
 	AttackFrontal:
 		Voice: Attack
 	WithInfantryBody:
-		AttackSequence: shoot
+		DefaultAttackSequence: attack
+	RevealsShroud:
+		Range: 7c0
 	ProducibleWithLevel:
 		Prerequisites: barracks.upgraded
 
 CYBORG:
 	Inherits: ^Cyborg
+	Inherits@EXPERIENCE: ^GainsExperience
+	Inherits@EXPHOSPITAL: ^InfantryExperienceHospitalOverrides
+	Inherits@AUTOTARGET: ^AutoTargetGroundAssaultMove
 	Armor:
 		Type: Light
 	Valued:
 		Cost: 650
 	Tooltip:
 		Name: Cyborg Infantry
-		Description: Cybernetic infantry unit.\n  Strong vs Infantry, Light armor\n  Weak vs Vehicles, Aircraft
+	UpdatesPlayerStatistics:
+		AddToArmyValue: true
 	Buildable:
 		Queue: Infantry
-		BuildPaletteOrder: 40
-		Prerequisites: ~nahand
+		BuildPaletteOrder: 60
+		Prerequisites: ~nahand, ~techlevel.medium
+		Description: Cybernetic infantry unit.\n  Strong vs Infantry, Light armor\n  Weak vs Vehicles, Aircraft
 	Selectable:
 		Bounds: 16,31,0,-10
+		DecorationBounds: 16,31,0,-10
 	Voiced:
 		VoiceSet: Cyborg
 	Mobile:
 		Speed: 56
 	Health:
-		HP: 300
+		HP: 30000
 	Passenger:
 	RevealsShroud:
 		Range: 5c0
@@ -54,69 +69,74 @@ CYBORG:
 	AttackFrontal:
 		Voice: Attack
 	SelectionDecorations:
-		VisualBounds: 16,31,0,-10
 	ProducibleWithLevel:
 		Prerequisites: barracks.upgraded
 
 CYC2:
 	Inherits: ^Cyborg
+	Inherits@EXPERIENCE: ^GainsExperience
+	Inherits@EXPHOSPITAL: ^InfantryExperienceHospitalOverrides
+	Inherits@AUTOTARGET: ^AutoTargetGroundAssaultMove
 	Armor:
 		Type: Heavy
 	Valued:
 		Cost: 2000
 	Tooltip:
 		Name: Cyborg Commando
-		Description: Elite cybernetic infantry unit.\n  Strong vs Infantry, Vehicles, Buildings\n  Weak vs Aircraft\nMaximum 1 can be trained.
+	UpdatesPlayerStatistics:
+		AddToArmyValue: true
 	Buildable:
 		Queue: Infantry
-		BuildPaletteOrder: 50
-		Prerequisites: ~nahand, natmpl
+		BuildPaletteOrder: 100
+		Prerequisites: ~nahand, natmpl, ~techlevel.high
 		BuildLimit: 1
+		Description: Elite cybernetic infantry unit.\n  Strong vs Infantry, Vehicles, Buildings\n  Weak vs Aircraft\nMaximum 1 can be trained.
 	Selectable:
 		Bounds: 16,32,-1,-12
+		DecorationBounds: 16,32,-1,-12
 	Voiced:
 		VoiceSet: CyborgCommando
 	Mobile:
 		Speed: 56
 	Health:
-		HP: 500
+		HP: 50000
 	Passenger:
 	RevealsShroud:
 		Range: 7c0
 	Armament:
 		Weapon: CyCannon
-		LocalOffset: 170,85,683
+		LocalOffset: 240,120,966
 	AttackFrontal:
 		Voice: Attack
 	SelectionDecorations:
-		VisualBounds: 16,32,-1,-12
 	ProducibleWithLevel:
 		Prerequisites: barracks.upgraded
 
 MHIJACK:
 	Inherits: ^Soldier
+	Inherits@2: ^HealsOnTiberium
 	Buildable:
 		Queue: Infantry
-		BuildPaletteOrder: 60
-		Prerequisites: ~nahand, natmpl
+		BuildPaletteOrder: 80
+		Prerequisites: ~nahand, natmpl, ~techlevel.high
+		BuildLimit: 1
+		Description: Hijacks enemy vehicles.\n  Unarmed
 	Valued:
 		Cost: 1850
 	Tooltip:
 		Name: Mutant Hijacker
-		Description: Hijacks enemy vehicles.\n  Unarmed
+	UpdatesPlayerStatistics:
+		AddToArmyValue: true
 	Voiced:
 		VoiceSet: Hijacker
 	Health:
-		HP: 300
-	PoisonedByTiberium:
-		Weapon: TiberiumHeal
+		HP: 30000
 	Mobile:
 		Speed: 99
+	-Crushable:
+	CaptureManager:
 	Captures:
 		CaptureTypes: Vehicle
+		PlayerExperience: 50
 	RevealsShroud:
 		Range: 6c0
-	-AutoTarget:
-	WithInfantryBody:
-		AttackSequence: shoot
-

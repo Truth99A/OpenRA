@@ -1,10 +1,8 @@
-MapFormat: 8
+MapFormat: 11
 
 RequiresMod: cnc
 
-Title: Nikoomba's Demise
-
-Description: In order for the Brotherhood to gain a foothold, we must begin by eliminating certain elements.\n\nNikoomba, the nearby village's leader, is one such element.\n\nHis views and ours do not coincide.\n\nHe and his whole group must be eliminated.
+Title: 01:   Nikoomba's Demise
 
 Author: Westwood Studios
 
@@ -16,23 +14,9 @@ Bounds: 21,14,37,24
 
 Visibility: MissionSelector
 
-Type: Campaign
+Categories: Campaign
 
-Videos:
-	BackgroundInfo: intro2.vqa
-	Briefing: nod1.vqa
-	GameLost: nodlose.vqa
-
-Options:
-	Crates: False
-	Creeps: False
-	Fog: True
-	Shroud: True
-	AllyBuildRadius: False
-	FragileAlliances: False
-	StartingCash: 0
-	ConfigurableStartingUnits: False
-	ShortGame: False
+LockPreview: True
 
 Players:
 	PlayerReference@Neutral:
@@ -44,12 +28,14 @@ Players:
 		Name: Villagers
 		NonCombatant: True
 		Faction: gdi
+		Bot: campaign
 	PlayerReference@GDI:
 		Name: GDI
 		Faction: gdi
 		Color: F5D378
 		Allies: Villagers
 		Enemies: Nod
+		Bot: campaign
 	PlayerReference@Nod:
 		Name: Nod
 		Playable: True
@@ -160,30 +146,6 @@ Actors:
 	Actor16: t08
 		Location: 55,37
 		Owner: Neutral
-	Actor17: t08
-		Location: 30,51
-		Owner: Neutral
-	Actor18: t08
-		Location: 58,53
-		Owner: Neutral
-	Actor19: t08
-		Location: 43,56
-		Owner: Neutral
-	Actor20: rock1
-		Location: 24,58
-		Owner: Neutral
-	Actor21: t08
-		Location: 52,58
-		Owner: Neutral
-	Actor22: rock1
-		Location: 55,58
-		Owner: Neutral
-	Actor23: t08
-		Location: 29,59
-		Owner: Neutral
-	Actor24: rock2
-		Location: 31,61
-		Owner: Neutral
 	Actor27: jeep
 		Location: 31,28
 		Owner: GDI
@@ -269,81 +231,4 @@ Actors:
 		Location: 24,17
 		Owner: Neutral
 
-Smudges:
-
-Rules:
-	Player:
-		-ConquestVictoryConditions:
-		MissionObjectives:
-			EarlyGameOver: true
-	World:
-		-CrateSpawner:
-		-SpawnMPUnits:
-		-MPStartLocations:
-		LuaScript:
-			Scripts: nod01.lua
-		ObjectivesPanel:
-			PanelName: MISSION_OBJECTIVES
-		MusicPlaylist:
-			StartingMusic: nomercy
-			VictoryMusic: nod_win1
-	C10:
-		Tooltip:
-			Name: Nikoomba
-	^Bridge:
-		DamageMultiplier@INVULNERABLE:
-			Modifier: 0
-	^CivBuilding:
-		MustBeDestroyed:
-	^CivInfantry:
-		MustBeDestroyed:
-	^Vehicle:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Tank:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Helicopter:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Infantry:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Plane:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Ship:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Building:
-		Tooltip:
-			GenericVisibility: Enemy
-			ShowOwnerRow: false
-	^Wall:
-		Tooltip:
-			ShowOwnerRow: false
-	^Husk:
-		Tooltip:
-			GenericVisibility: Enemy, Ally, Neutral
-			GenericStancePrefix: false
-			ShowOwnerRow: false
-
-Sequences:
-
-VoxelSequences:
-
-Weapons:
-
-Voices:
-
-Music:
-
-Notifications:
-
-Translations:
+Rules: cnc|rules/campaign-maprules.yaml, cnc|rules/campaign-tooltips.yaml, cnc|rules/campaign-palettes.yaml, rules.yaml

@@ -1,41 +1,52 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Traits;
-using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Activities
 {
 	public class ResupplyAircraft : Activity
 	{
-		readonly Aircraft aircraft;
+		public ResupplyAircraft(Actor self) { }
 
-		public ResupplyAircraft(Actor self)
+		protected override void OnFirstRun(Actor self)
 		{
-			aircraft = self.Trait<Aircraft>();
+			var aircraft = self.Trait<Aircraft>();
+			var host = aircraft.GetActorBelow();
+
+			if (host == null)
+				return;
+
+			var resupplyActivities = aircraft.GetResupplyActivities(host).ToArray();
+			if (resupplyActivities.Any())
+				QueueChild(self, ActivityUtils.SequenceActivities(self, resupplyActivities));
+
+			QueueChild(self, new AllowYieldingReservation(self));
+
+			if (aircraft.Info.TakeOffOnResupply)
+				QueueChild(self, new TakeOff(self, (a, b, c) => NextActivity == null && b.NextActivity == null));
 		}
 
 		public override Activity Tick(Actor self)
 		{
-			var host = aircraft.GetActorBelow();
+			if (ChildActivity != null)
+			{
+				ChildActivity = ActivityUtils.RunActivity(self, ChildActivity);
+				return this;
+			}
 
-			if (host == null)
-				return NextActivity;
-
-			return Util.SequenceActivities(
-				aircraft.GetResupplyActivities(host).Append(NextActivity).ToArray());
+			return NextActivity;
 		}
 	}
 }
