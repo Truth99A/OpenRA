@@ -29,19 +29,6 @@ namespace OpenRA.Mods.Cnc.Traits
 		public readonly int ThumpInterval = 8;
 		[WeaponReference]
 		public readonly string ThumpDamageWeapon = "MADTankThump";
-		public readonly int ThumpShakeIntensity = 3;
-		public readonly float2 ThumpShakeMultiplier = new float2(1, 0);
-		public readonly int ThumpShakeTime = 10;
-
-		[Desc("Measured in ticks.")]
-		public readonly int ChargeDelay = 96;
-		public readonly string ChargeSound = "madchrg2.aud";
-
-		[Desc("Measured in ticks.")]
-		public readonly int DetonationDelay = 42;
-		public readonly string DetonationSound = "madexplo.aud";
-		[WeaponReference]
-		public readonly string DetonationWeapon = "MADTankDetonate";
 
 		[ActorReference]
 		public readonly string DriverActor = "e1";
@@ -53,7 +40,6 @@ namespace OpenRA.Mods.Cnc.Traits
 		public readonly string DeployedCondition = null;
 
 		public WeaponInfo ThumpDamageWeaponInfo { get; private set; }
-		public WeaponInfo DetonationWeaponInfo { get; private set; }
 
 		[Desc("Types of damage that this trait causes to self while self-destructing. Leave empty for no damage types.")]
 		public readonly BitSet<DamageType> DamageTypes = default(BitSet<DamageType>);
@@ -62,18 +48,12 @@ namespace OpenRA.Mods.Cnc.Traits
 		public void RulesetLoaded(Ruleset rules, ActorInfo ai)
 		{
 			WeaponInfo thumpDamageWeapon;
-			WeaponInfo detonationWeapon;
 			var thumpDamageWeaponToLower = (ThumpDamageWeapon ?? string.Empty).ToLowerInvariant();
-			var detonationWeaponToLower = (DetonationWeapon ?? string.Empty).ToLowerInvariant();
 
 			if (!rules.Weapons.TryGetValue(thumpDamageWeaponToLower, out thumpDamageWeapon))
 				throw new YamlException("Weapons Ruleset does not contain an entry '{0}'".F(thumpDamageWeaponToLower));
 
-			if (!rules.Weapons.TryGetValue(detonationWeaponToLower, out detonationWeapon))
-				throw new YamlException("Weapons Ruleset does not contain an entry '{0}'".F(detonationWeaponToLower));
-
 			ThumpDamageWeaponInfo = thumpDamageWeapon;
-			DetonationWeaponInfo = detonationWeapon;
 		}
 	}
 
@@ -82,17 +62,16 @@ namespace OpenRA.Mods.Cnc.Traits
 		readonly Actor self;
 		readonly MadTankInfo info;
 		readonly WithFacingSpriteBody wfsb;
-		readonly ScreenShaker screenShaker;
 		ConditionManager conditionManager;
 		bool deployed;
 		int tick;
+		int condition;
 
 		public MadTank(Actor self, MadTankInfo info)
 		{
 			this.self = self;
 			this.info = info;
 			wfsb = self.Trait<WithFacingSpriteBody>();
-			screenShaker = self.World.WorldActor.Trait<ScreenShaker>();
 		}
 
 		void INotifyCreated.Created(Actor self)
@@ -104,16 +83,9 @@ namespace OpenRA.Mods.Cnc.Traits
 		{
 			if (!deployed)
 				return;
-
-			if (++tick >= info.ThumpInterval)
+			else if (deployed && ++tick >= info.ThumpInterval)
 			{
-				if (info.ThumpDamageWeapon != null)
-				{
-					// Use .FromPos since this weapon needs to affect more than just the MadTank actor
-					info.ThumpDamageWeaponInfo.Impact(Target.FromPos(self.CenterPosition), self, Enumerable.Empty<int>());
-				}
-
-				screenShaker.AddEffect(info.ThumpShakeTime, self.CenterPosition, info.ThumpShakeIntensity, info.ThumpShakeMultiplier);
+				Thump();
 				tick = 0;
 			}
 		}
@@ -122,14 +94,14 @@ namespace OpenRA.Mods.Cnc.Traits
 		{
 			get
 			{
-				yield return new TargetTypeOrderTargeter(new BitSet<TargetableType>("DetonateAttack"), "DetonateAttack", 5, "attack", true, false) { ForceAttack = false };
-				yield return new DeployOrderTargeter("Detonate", 5);
+				yield return new TargetTypeOrderTargeter(new BitSet<TargetableType>("ThumpAttack"), "ThumpAttack", 5, "attack", true, false) { ForceAttack = false };
+				yield return new DeployOrderTargeter("Thump", 5);
 			}
 		}
 
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, Target target, bool queued)
 		{
-			if (order.OrderID != "DetonateAttack" && order.OrderID != "Detonate")
+			if (order.OrderID != "ThumpAttack" && order.OrderID != "Thump")
 				return null;
 
 			return new Order(order.OrderID, self, target, queued);
@@ -137,7 +109,19 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
 		{
-			return new Order("Detonate", self, queued);
+			if (!deployed) 
+			{
+				return new Order("Thump", self, queued);
+			}
+			else
+			{
+				deployed = false;
+
+				if (conditionManager != null && !string.IsNullOrEmpty(info.DeployedCondition))
+					condition = conditionManager.RevokeCondition(self, condition);
+				
+				return null;
+			}
 		}
 
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self) { return true; }
@@ -147,68 +131,47 @@ namespace OpenRA.Mods.Cnc.Traits
 			return info.Voice;
 		}
 
-		void Detonate()
+		void Thump()
 		{
 			self.World.AddFrameEndTask(w =>
 			{
-				if (info.DetonationWeapon != null)
+				if (info.ThumpSequence != null) 
 				{
-					// Use .FromPos since this actor is killed. Cannot use Target.FromActor
-					info.DetonationWeaponInfo.Impact(Target.FromPos(self.CenterPosition), self, Enumerable.Empty<int>());
+					wfsb.PlayCustomAnimation(self, info.ThumpSequence);
 				}
 
-				self.Kill(self, info.DamageTypes);
+				if (info.ThumpDamageWeapon != null)
+				{
+					// Use .FromPos since this weapon needs to affect more than just the MadTank actor
+					info.ThumpDamageWeaponInfo.Impact(Target.FromPos(self.CenterPosition), self, Enumerable.Empty<int>());
+				}
 			});
 		}
 
-		void EjectDriver()
-		{
-			var driver = self.World.CreateActor(info.DriverActor.ToLowerInvariant(), new TypeDictionary
-			{
-				new LocationInit(self.Location),
-				new OwnerInit(self.Owner)
-			});
-			var driverMobile = driver.TraitOrDefault<Mobile>();
-			if (driverMobile != null)
-				driverMobile.Nudge(driver, driver, true);
-		}
-
-		void StartDetonationSequence()
-		{
-			if (deployed)
-				return;
+		void Thumping() {
+			deployed = true;
 
 			if (conditionManager != null && !string.IsNullOrEmpty(info.DeployedCondition))
-				conditionManager.GrantCondition(self, info.DeployedCondition);
-
-			self.World.AddFrameEndTask(w => EjectDriver());
-			if (info.ThumpSequence != null)
-				wfsb.PlayCustomAnimationRepeating(self, info.ThumpSequence);
-			deployed = true;
-			self.QueueActivity(new Wait(info.ChargeDelay, false));
-			self.QueueActivity(new CallFunc(() => Game.Sound.Play(SoundType.World, info.ChargeSound, self.CenterPosition)));
-			self.QueueActivity(new Wait(info.DetonationDelay, false));
-			self.QueueActivity(new CallFunc(() => Game.Sound.Play(SoundType.World, info.DetonationSound, self.CenterPosition)));
-			self.QueueActivity(new CallFunc(Detonate));
+				condition = conditionManager.GrantCondition(self, info.DeployedCondition);
 		}
 
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "DetonateAttack")
+			if (order.OrderString == "ThumpAttack")
 			{
 				if (!order.Queued)
 					self.CancelActivity();
 
 				self.SetTargetLine(order.Target, Color.Red);
 				self.QueueActivity(new MoveAdjacentTo(self, order.Target, targetLineColor: Color.Red));
-				self.QueueActivity(new CallFunc(StartDetonationSequence));
+				self.QueueActivity(new CallFunc(Thumping));
 			}
-			else if (order.OrderString == "Detonate")
+			else if (order.OrderString == "Thump")
 			{
 				if (!order.Queued)
 					self.CancelActivity();
-
-				self.QueueActivity(new CallFunc(StartDetonationSequence));
+				
+				self.QueueActivity(new CallFunc(Thumping));
 			}
 		}
 	}
