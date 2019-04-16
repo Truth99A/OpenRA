@@ -1,15 +1,16 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System.Collections.Generic;
-using System.Linq;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Orders
@@ -21,8 +22,8 @@ namespace OpenRA.Mods.Common.Orders
 
 		public UnitOrderTargeter(string order, int priority, string cursor, bool targetEnemyUnits, bool targetAllyUnits)
 		{
-			this.OrderID = order;
-			this.OrderPriority = priority;
+			OrderID = order;
+			OrderPriority = priority;
 			this.cursor = cursor;
 			this.targetEnemyUnits = targetEnemyUnits;
 			this.targetAllyUnits = targetAllyUnits;
@@ -31,7 +32,7 @@ namespace OpenRA.Mods.Common.Orders
 		public string OrderID { get; private set; }
 		public int OrderPriority { get; private set; }
 		public bool? ForceAttack = null;
-		public bool OverrideSelection { get { return true; } }
+		public bool TargetOverridesSelection(TargetModifiers modifiers) { return true; }
 
 		public abstract bool CanTargetActor(Actor self, Actor target, TargetModifiers modifiers, ref string cursor);
 		public abstract bool CanTargetFrozenActor(Actor self, FrozenActor target, TargetModifiers modifiers, ref string cursor);
@@ -67,9 +68,9 @@ namespace OpenRA.Mods.Common.Orders
 
 	public class TargetTypeOrderTargeter : UnitOrderTargeter
 	{
-		readonly string[] targetTypes;
+		readonly BitSet<TargetableType> targetTypes;
 
-		public TargetTypeOrderTargeter(string[] targetTypes, string order, int priority, string cursor, bool targetEnemyUnits, bool targetAllyUnits)
+		public TargetTypeOrderTargeter(BitSet<TargetableType> targetTypes, string order, int priority, string cursor, bool targetEnemyUnits, bool targetAllyUnits)
 			: base(order, priority, cursor, targetEnemyUnits, targetAllyUnits)
 		{
 			this.targetTypes = targetTypes;
@@ -77,7 +78,7 @@ namespace OpenRA.Mods.Common.Orders
 
 		public override bool CanTargetActor(Actor self, Actor target, TargetModifiers modifiers, ref string cursor)
 		{
-			return target.TraitsImplementing<ITargetable>().Any(t => t.IsTraitEnabled() && t.TargetTypes.Overlaps(targetTypes));
+			return targetTypes.Overlaps(target.GetEnabledTargetTypes());
 		}
 
 		public override bool CanTargetFrozenActor(Actor self, FrozenActor target, TargetModifiers modifiers, ref string cursor)

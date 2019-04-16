@@ -1,15 +1,15 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Traits;
@@ -22,14 +22,14 @@ namespace OpenRA.Mods.Common.Activities
 	{
 		readonly Actor self;
 		readonly Cargo cargo;
-		readonly Cloak cloak;
+		readonly INotifyUnload[] notifiers;
 		readonly bool unloadAll;
 
 		public UnloadCargo(Actor self, bool unloadAll)
 		{
 			this.self = self;
 			cargo = self.Trait<Cargo>();
-			cloak = self.TraitOrDefault<Cloak>();
+			notifiers = self.TraitsImplementing<INotifyUnload>().ToArray();
 			this.unloadAll = unloadAll;
 		}
 
@@ -55,12 +55,25 @@ namespace OpenRA.Mods.Common.Activities
 
 		public override Activity Tick(Actor self)
 		{
+			if (ChildActivity != null)
+			{
+				ChildActivity = ActivityUtils.RunActivity(self, ChildActivity);
+				if (ChildActivity != null)
+					return this;
+			}
+
 			cargo.Unloading = false;
-			if (IsCanceled || cargo.IsEmpty(self))
+			if (IsCanceling || cargo.IsEmpty(self))
 				return NextActivity;
 
-			if (cloak != null && cloak.Info.UncloakOnUnload)
-				cloak.Uncloak();
+			if (!cargo.CanUnload())
+			{
+				Cancel(self, true);
+				return NextActivity;
+			}
+
+			foreach (var inu in notifiers)
+				inu.Unloading(self);
 
 			var actor = cargo.Peek(self);
 			var spawn = self.CenterPosition;
@@ -69,8 +82,8 @@ namespace OpenRA.Mods.Common.Activities
 			if (exitSubCell == null)
 			{
 				self.NotifyBlocker(BlockedExitCells(actor));
-
-				return Util.SequenceActivities(new Wait(10), this);
+				QueueChild(self, new Wait(10), true);
+				return this;
 			}
 
 			cargo.Unload(self);

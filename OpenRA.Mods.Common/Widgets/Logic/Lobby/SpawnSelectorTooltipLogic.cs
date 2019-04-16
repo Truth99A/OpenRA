@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -17,9 +18,10 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 	public class SpawnSelectorTooltipLogic : ChromeLogic
 	{
 		[ObjectCreator.UseCtor]
-		public SpawnSelectorTooltipLogic(Widget widget, TooltipContainerWidget tooltipContainer, MapPreviewWidget preview)
+		public SpawnSelectorTooltipLogic(Widget widget, TooltipContainerWidget tooltipContainer, MapPreviewWidget preview, bool showUnoccupiedSpawnpoints)
 		{
-			widget.IsVisible = () => preview.TooltipSpawnIndex != -1;
+			bool showTooltip = true;
+			widget.IsVisible = () => preview.TooltipSpawnIndex != -1 && showTooltip;
 			var label = widget.Get<LabelWidget>("LABEL");
 			var flag = widget.Get<ImageWidget>("FLAG");
 			var team = widget.Get<LabelWidget>("TEAM");
@@ -38,11 +40,18 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			tooltipContainer.BeforeRender = () =>
 			{
+				showTooltip = true;
 				var occupant = preview.SpawnOccupants().Values.FirstOrDefault(c => c.SpawnPoint == preview.TooltipSpawnIndex);
 
 				var teamWidth = 0;
 				if (occupant == null)
 				{
+					if (!showUnoccupiedSpawnpoints)
+					{
+						showTooltip = false;
+						return;
+					}
+
 					labelText = "Available spawn";
 					playerFaction = null;
 					playerTeam = 0;

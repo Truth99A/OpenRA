@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -12,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Effects;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.GameRules
@@ -23,6 +25,7 @@ namespace OpenRA.GameRules
 		public int[] InaccuracyModifiers;
 		public int[] RangeModifiers;
 		public int Facing;
+		public Func<int> CurrentMuzzleFacing;
 		public WPos Source;
 		public Func<WPos> CurrentSource;
 		public Actor SourceActor;
@@ -30,15 +33,31 @@ namespace OpenRA.GameRules
 		public Target GuidedTarget;
 	}
 
-	public interface IProjectileInfo { IEffect Create(ProjectileArgs args); }
+	public interface IProjectile : IEffect { }
+	public interface IProjectileInfo { IProjectile Create(ProjectileArgs args); }
 
 	public sealed class WeaponInfo
 	{
 		[Desc("The maximum range the weapon can fire.")]
 		public readonly WDist Range = WDist.Zero;
 
-		[Desc("The sound played when the weapon is fired.")]
+		[Desc("First burst is aimed at this offset relative to target position.")]
+		public readonly WVec FirstBurstTargetOffset = WVec.Zero;
+
+		[Desc("Each burst after the first lands by this offset away from the previous burst.")]
+		public readonly WVec FollowingBurstTargetOffset = WVec.Zero;
+
+		[Desc("The sound played each time the weapon is fired.")]
 		public readonly string[] Report = null;
+
+		[Desc("Sound played only on first burst in a salvo.")]
+		public readonly string[] StartBurstReport = null;
+
+		[Desc("The sound played when the weapon is reloaded.")]
+		public readonly string[] AfterFireSound = null;
+
+		[Desc("Delay in ticks to play reloading sound.")]
+		public readonly int AfterFireSoundDelay = 0;
 
 		[Desc("Delay in ticks between reloading ammo magazines.")]
 		public readonly int ReloadDelay = 1;
@@ -46,19 +65,21 @@ namespace OpenRA.GameRules
 		[Desc("Number of shots in a single ammo magazine.")]
 		public readonly int Burst = 1;
 
-		public readonly bool Charges = false;
-
 		[Desc("What types of targets are affected.")]
-		public readonly HashSet<string> ValidTargets = new HashSet<string> { "Ground", "Water" };
+		public readonly BitSet<TargetableType> ValidTargets = new BitSet<TargetableType>("Ground", "Water");
 
 		[Desc("What types of targets are unaffected.", "Overrules ValidTargets.")]
-		public readonly HashSet<string> InvalidTargets = new HashSet<string>();
+		public readonly BitSet<TargetableType> InvalidTargets;
 
-		[Desc("Delay in ticks between firing shots from the same ammo magazine.")]
-		public readonly int BurstDelay = 5;
+		[Desc("Delay in ticks between firing shots from the same ammo magazine. If one entry, it will be used for all bursts.",
+			"If multiple entries, their number needs to match Burst - 1.")]
+		public readonly int[] BurstDelays = { 5 };
 
 		[Desc("The minimum range the weapon can fire.")]
 		public readonly WDist MinRange = WDist.Zero;
+
+		[Desc("Does this weapon aim at the target's center regardless of other targetable offsets?")]
+		public readonly bool TargetActorCenter = false;
 
 		[FieldLoader.LoadUsing("LoadProjectile")]
 		public readonly IProjectileInfo Projectile;
@@ -68,6 +89,9 @@ namespace OpenRA.GameRules
 
 		public WeaponInfo(string name, MiniYaml content)
 		{
+			// Resolve any weapon-level yaml inheritance or removals
+			// HACK: The "Defaults" sequence syntax prevents us from doing this generally during yaml parsing
+			content.Nodes = MiniYaml.Merge(new[] { content.Nodes });
 			FieldLoader.Load(this, content);
 		}
 
@@ -94,7 +118,7 @@ namespace OpenRA.GameRules
 			return retList;
 		}
 
-		public bool IsValidTarget(IEnumerable<string> targetTypes)
+		public bool IsValidTarget(BitSet<TargetableType> targetTypes)
 		{
 			return ValidTargets.Overlaps(targetTypes) && !InvalidTargets.Overlaps(targetTypes);
 		}
@@ -127,14 +151,17 @@ namespace OpenRA.GameRules
 		/// <summary>Checks if the weapon is valid against (can target) the actor.</summary>
 		public bool IsValidAgainst(Actor victim, Actor firedBy)
 		{
-			var targetable = victim.TraitsImplementing<ITargetable>().Where(Exts.IsTraitEnabled);
-			if (!IsValidTarget(targetable.SelectMany(t => t.TargetTypes)))
+			var targetTypes = victim.GetEnabledTargetTypes();
+
+			if (!IsValidTarget(targetTypes))
 				return false;
 
-			if (!Warheads.Any(w => w.IsValidAgainst(victim, firedBy)))
-				return false;
+			// PERF: Avoid LINQ.
+			foreach (var warhead in Warheads)
+				if (warhead.IsValidAgainst(victim, firedBy))
+					return true;
 
-			return true;
+			return false;
 		}
 
 		/// <summary>Checks if the weapon is valid against (can target) the frozen actor.</summary>
@@ -156,11 +183,10 @@ namespace OpenRA.GameRules
 			{
 				var wh = warhead; // force the closure to bind to the current warhead
 
-				Action a = () => wh.DoImpact(target, firedBy, damageModifiers);
 				if (wh.Delay > 0)
-					firedBy.World.AddFrameEndTask(w => w.Add(new DelayedAction(wh.Delay, a)));
+					firedBy.World.AddFrameEndTask(w => w.Add(new DelayedImpact(wh.Delay, wh, target, firedBy, damageModifiers)));
 				else
-					a();
+					wh.DoImpact(target, firedBy, damageModifiers);
 			}
 		}
 	}

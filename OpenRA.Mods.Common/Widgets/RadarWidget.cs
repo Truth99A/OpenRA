@@ -1,25 +1,26 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets
 {
-	public class RadarWidget : Widget
+	public sealed class RadarWidget : Widget, IDisposable
 	{
 		public string WorldInteractionController = null;
 		public int AnimationLength = 5;
@@ -57,6 +58,9 @@ namespace OpenRA.Mods.Common.Widgets
 		Sprite shroudSprite;
 		Shroud renderShroud;
 
+		public string SoundUp { get; private set; }
+		public string SoundDown { get; private set; }
+
 		[ObjectCreator.UseCtor]
 		public RadarWidget(World world, WorldRenderer worldRenderer)
 		{
@@ -87,7 +91,7 @@ namespace OpenRA.Mods.Common.Widgets
 			foreach (var cell in world.Map.AllCells)
 				UpdateTerrainCell(cell);
 
-			world.Map.MapTiles.Value.CellEntryChanged += UpdateTerrainCell;
+			world.Map.Tiles.CellEntryChanged += UpdateTerrainCell;
 			world.Map.CustomTerrain.CellEntryChanged += UpdateTerrainCell;
 		}
 
@@ -123,9 +127,9 @@ namespace OpenRA.Mods.Common.Widgets
 			previewOrigin = new int2((int)((rb.Width - previewScale * b.Width) / 2), (int)((rb.Height - previewScale * b.Height) / 2));
 			mapRect = new Rectangle(previewOrigin.X, previewOrigin.Y, (int)(previewScale * b.Width), (int)(previewScale * b.Height));
 
-			terrainSprite = new Sprite(radarSheet, b, TextureChannel.Alpha);
-			shroudSprite = new Sprite(radarSheet, new Rectangle(b.Location + new Size(previewWidth, 0), b.Size), TextureChannel.Alpha);
-			actorSprite = new Sprite(radarSheet, new Rectangle(b.Location + new Size(0, previewHeight), b.Size), TextureChannel.Alpha);
+			terrainSprite = new Sprite(radarSheet, b, TextureChannel.RGBA);
+			shroudSprite = new Sprite(radarSheet, new Rectangle(b.Location + new Size(previewWidth, 0), b.Size), TextureChannel.RGBA);
+			actorSprite = new Sprite(radarSheet, new Rectangle(b.Location + new Size(0, previewHeight), b.Size), TextureChannel.RGBA);
 		}
 
 		void UpdateTerrainCell(CPos cell)
@@ -139,12 +143,12 @@ namespace OpenRA.Mods.Common.Widgets
 			int leftColor, rightColor;
 			if (custom == byte.MaxValue)
 			{
-				var type = world.TileSet.GetTileInfo(world.Map.MapTiles.Value[uv]);
+				var type = world.Map.Rules.TileSet.GetTileInfo(world.Map.Tiles[uv]);
 				leftColor = type != null ? type.LeftColor.ToArgb() : Color.Black.ToArgb();
 				rightColor = type != null ? type.RightColor.ToArgb() : Color.Black.ToArgb();
 			}
 			else
-				leftColor = rightColor = world.TileSet[custom].Color.ToArgb();
+				leftColor = rightColor = world.Map.Rules.TileSet[custom].Color.ToArgb();
 
 			var stride = radarSheet.Size.Width;
 
@@ -219,7 +223,8 @@ namespace OpenRA.Mods.Common.Widgets
 				return null;
 
 			var cell = MinimapPixelToCell(pos);
-			var location = worldRenderer.Viewport.WorldToViewPx(worldRenderer.ScreenPxPosition(world.Map.CenterOfCell(cell)));
+			var worldPixel = worldRenderer.ScreenPxPosition(world.Map.CenterOfCell(cell));
+			var location = worldRenderer.Viewport.WorldToViewPx(worldPixel);
 
 			var mi = new MouseInput
 			{
@@ -228,7 +233,7 @@ namespace OpenRA.Mods.Common.Widgets
 				Modifiers = Game.GetModifierKeys()
 			};
 
-			var cursor = world.OrderGenerator.GetCursor(world, cell, mi);
+			var cursor = world.OrderGenerator.GetCursor(world, cell, worldPixel, mi);
 			if (cursor == null)
 				return "default";
 
@@ -307,7 +312,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 				Game.Renderer.EnableScissor(mapRect);
 				DrawRadarPings();
-				Game.Renderer.LineRenderer.DrawRect(tl, br, Color.White);
+				Game.Renderer.RgbaColorRenderer.DrawRect(tl, br, 1, Color.White);
 				Game.Renderer.DisableScissor();
 			}
 		}
@@ -317,22 +322,13 @@ namespace OpenRA.Mods.Common.Widgets
 			if (radarPings == null)
 				return;
 
-			var lr = Game.Renderer.LineRenderer;
-			var oldWidth = lr.LineWidth;
-			lr.LineWidth = 2;
-
 			foreach (var radarPing in radarPings.Pings.Where(e => e.IsVisible()))
 			{
 				var c = radarPing.Color;
 				var pingCell = world.Map.CellContaining(radarPing.Position);
 				var points = radarPing.Points(CellToMinimapPixel(pingCell)).ToArray();
-
-				lr.DrawLine(points[0], points[1], c);
-				lr.DrawLine(points[1], points[2], c);
-				lr.DrawLine(points[2], points[0], c);
+				Game.Renderer.RgbaColorRenderer.DrawPolygon(points, 2, c);
 			}
-
-			lr.LineWidth = oldWidth;
 		}
 
 		public override void Tick()
@@ -340,7 +336,7 @@ namespace OpenRA.Mods.Common.Widgets
 			// Enable/Disable the radar
 			var enabled = IsEnabled();
 			if (enabled != cachedEnabled)
-				Game.Sound.Play(enabled ? RadarOnlineSound : RadarOfflineSound);
+				Game.Sound.Play(SoundType.UI, enabled ? RadarOnlineSound : RadarOfflineSound);
 			cachedEnabled = enabled;
 
 			if (enabled)
@@ -368,6 +364,8 @@ namespace OpenRA.Mods.Common.Widgets
 				var stride = radarSheet.Size.Width;
 				Array.Clear(radarData, 4 * actorSprite.Bounds.Top * stride, 4 * actorSprite.Bounds.Height * stride);
 
+				var cells = new List<Pair<CPos, Color>>();
+
 				unsafe
 				{
 					fixed (byte* colorBytes = &radarData[0])
@@ -379,7 +377,9 @@ namespace OpenRA.Mods.Common.Widgets
 							if (!t.Actor.IsInWorld || world.FogObscures(t.Actor))
 								continue;
 
-							foreach (var cell in t.Trait.RadarSignatureCells(t.Actor))
+							cells.Clear();
+							t.Trait.PopulateRadarSignatureCells(t.Actor, cells);
+							foreach (var cell in cells)
 							{
 								if (!world.Map.Contains(cell.First))
 									continue;
@@ -451,8 +451,14 @@ namespace OpenRA.Mods.Common.Widgets
 		public override void Removed()
 		{
 			base.Removed();
-			world.Map.MapTiles.Value.CellEntryChanged -= UpdateTerrainCell;
+			world.Map.Tiles.CellEntryChanged -= UpdateTerrainCell;
 			world.Map.CustomTerrain.CellEntryChanged -= UpdateTerrainCell;
+			Dispose();
+		}
+
+		public void Dispose()
+		{
+			radarSheet.Dispose();
 		}
 	}
 }

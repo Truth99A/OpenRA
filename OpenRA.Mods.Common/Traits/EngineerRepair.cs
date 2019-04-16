@@ -1,17 +1,18 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System.Collections.Generic;
-using System.Drawing;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
@@ -20,6 +21,13 @@ namespace OpenRA.Mods.Common.Traits
 	class EngineerRepairInfo : ITraitInfo
 	{
 		[VoiceReference] public readonly string Voice = "Action";
+
+		[Desc("Behaviour when entering the structure.",
+			"Possible values are Exit, Suicide, Dispose.")]
+		public readonly EnterBehaviour EnterBehaviour = EnterBehaviour.Dispose;
+
+		[Desc("What diplomatic stances allow target to be repaired by this actor.")]
+		public readonly Stance ValidStances = Stance.Ally;
 
 		public object Create(ActorInitializer init) { return new EngineerRepair(init, this); }
 	}
@@ -43,33 +51,18 @@ namespace OpenRA.Mods.Common.Traits
 			if (order.OrderID != "EngineerRepair")
 				return null;
 
-			if (target.Type == TargetType.FrozenActor)
-				return new Order(order.OrderID, self, queued) { ExtraData = target.FrozenActor.ID };
-
-			return new Order(order.OrderID, self, queued) { TargetActor = target.Actor };
+			return new Order(order.OrderID, self, target, queued);
 		}
 
 		static bool IsValidOrder(Actor self, Order order)
 		{
-			// Not targeting a frozen actor
-			if (order.ExtraData == 0 && order.TargetActor == null)
-				return false;
+			if (order.Target.Type == TargetType.FrozenActor)
+				return order.Target.FrozenActor.DamageState > DamageState.Undamaged;
 
-			if (order.ExtraData != 0)
-			{
-				// Targeted an actor under the fog
-				var frozenLayer = self.Owner.PlayerActor.TraitOrDefault<FrozenActorLayer>();
-				if (frozenLayer == null)
-					return false;
+			if (order.Target.Type == TargetType.Actor)
+				return order.Target.Actor.GetDamageState() > DamageState.Undamaged;
 
-				var frozen = frozenLayer.FromID(order.ExtraData);
-				if (frozen == null)
-					return false;
-
-				return frozen.DamageState > DamageState.Undamaged;
-			}
-
-			return order.TargetActor.GetDamageState() > DamageState.Undamaged;
+			return false;
 		}
 
 		public string VoicePhraseForOrder(Actor self, Order order)
@@ -83,15 +76,11 @@ namespace OpenRA.Mods.Common.Traits
 			if (order.OrderString != "EngineerRepair" || !IsValidOrder(self, order))
 				return;
 
-			var target = self.ResolveFrozenActorOrder(order, Color.Yellow);
-			if (target.Type != TargetType.Actor)
-				return;
-
 			if (!order.Queued)
 				self.CancelActivity();
 
-			self.SetTargetLine(target, Color.Yellow);
-			self.QueueActivity(new RepairBuilding(self, target.Actor));
+			self.SetTargetLine(order.Target, Color.Yellow);
+			self.QueueActivity(new RepairBuilding(self, order.Target, info.EnterBehaviour, info.ValidStances));
 		}
 
 		class EngineerRepairOrderTargeter : UnitOrderTargeter

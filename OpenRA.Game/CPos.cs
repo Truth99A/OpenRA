@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -17,27 +18,43 @@ namespace OpenRA
 {
 	public struct CPos : IScriptBindable, ILuaAdditionBinding, ILuaSubtractionBinding, ILuaEqualityBinding, ILuaTableBinding, IEquatable<CPos>
 	{
-		public readonly int X, Y;
+		// Coordinates are packed in a 32 bit signed int
+		// X and Y are 12 bits (signed): -2048...2047
+		// Layer is an unsigned byte
+		// Packing is XXXX XXXX XXXX YYYY YYYY YYYY LLLL LLLL
+		public readonly int Bits;
 
-		public CPos(int x, int y) { X = x; Y = y; }
-		public static readonly CPos Zero = new CPos(0, 0);
+		// X is padded to MSB, so bit shift does the correct sign extension
+		public int X { get { return Bits >> 20; } }
+
+		// Align Y with a short, cast, then shift the rest of the way
+		// The signed short bit shift does the correct sign extension
+		public int Y { get { return ((short)(Bits >> 4)) >> 4; } }
+
+		public byte Layer { get { return (byte)Bits; } }
+
+		public CPos(int bits) { Bits = bits; }
+		public CPos(int x, int y) : this(x, y, 0) { }
+		public CPos(int x, int y, byte layer)
+		{
+			Bits = (x & 0xFFF) << 20 | (y & 0xFFF) << 8 | layer;
+		}
+
+		public static readonly CPos Zero = new CPos(0, 0, 0);
 
 		public static explicit operator CPos(int2 a) { return new CPos(a.X, a.Y); }
 
-		public static CPos operator +(CVec a, CPos b) { return new CPos(a.X + b.X, a.Y + b.Y); }
-		public static CPos operator +(CPos a, CVec b) { return new CPos(a.X + b.X, a.Y + b.Y); }
-		public static CPos operator -(CPos a, CVec b) { return new CPos(a.X - b.X, a.Y - b.Y); }
+		public static CPos operator +(CVec a, CPos b) { return new CPos(a.X + b.X, a.Y + b.Y, b.Layer); }
+		public static CPos operator +(CPos a, CVec b) { return new CPos(a.X + b.X, a.Y + b.Y, a.Layer); }
+		public static CPos operator -(CPos a, CVec b) { return new CPos(a.X - b.X, a.Y - b.Y, a.Layer); }
 		public static CVec operator -(CPos a, CPos b) { return new CVec(a.X - b.X, a.Y - b.Y); }
 
-		public static bool operator ==(CPos me, CPos other) { return me.X == other.X && me.Y == other.Y; }
+		public static bool operator ==(CPos me, CPos other) { return me.Bits == other.Bits; }
 		public static bool operator !=(CPos me, CPos other) { return !(me == other); }
 
-		public static CPos Max(CPos a, CPos b) { return new CPos(Math.Max(a.X, b.X), Math.Max(a.Y, b.Y)); }
-		public static CPos Min(CPos a, CPos b) { return new CPos(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y)); }
+		public override int GetHashCode() { return Bits.GetHashCode(); }
 
-		public override int GetHashCode() { return X.GetHashCode() ^ Y.GetHashCode(); }
-
-		public bool Equals(CPos other) { return X == other.X && Y == other.Y; }
+		public bool Equals(CPos other) { return Bits == other.Bits; }
 		public override bool Equals(object obj) { return obj is CPos && Equals((CPos)obj); }
 
 		public override string ToString() { return X + "," + Y; }
@@ -73,7 +90,7 @@ namespace OpenRA
 		{
 			CPos a;
 			CVec b;
-			if (!left.TryGetClrValue<CPos>(out a) || !right.TryGetClrValue<CVec>(out b))
+			if (!left.TryGetClrValue(out a) || !right.TryGetClrValue(out b))
 				throw new LuaException("Attempted to call CPos.Add(CPos, CVec) with invalid arguments ({0}, {1})".F(left.WrappedClrType().Name, right.WrappedClrType().Name));
 
 			return new LuaCustomClrObject(a + b);
@@ -82,17 +99,30 @@ namespace OpenRA
 		public LuaValue Subtract(LuaRuntime runtime, LuaValue left, LuaValue right)
 		{
 			CPos a;
-			CVec b;
-			if (!left.TryGetClrValue<CPos>(out a) || !right.TryGetClrValue<CVec>(out b))
-				throw new LuaException("Attempted to call CPos.Subtract(CPos, CVec) with invalid arguments ({0}, {1})".F(left.WrappedClrType().Name, right.WrappedClrType().Name));
+			var rightType = right.WrappedClrType();
+			if (!left.TryGetClrValue(out a))
+				throw new LuaException("Attempted to call CPos.Subtract(CPos, (CPos|CVec)) with invalid arguments ({0}, {1})".F(left.WrappedClrType().Name, rightType.Name));
 
-			return new LuaCustomClrObject(a - b);
+			if (rightType == typeof(CPos))
+			{
+				CPos b;
+				right.TryGetClrValue(out b);
+				return new LuaCustomClrObject(a - b);
+			}
+			else if (rightType == typeof(CVec))
+			{
+				CVec b;
+				right.TryGetClrValue(out b);
+				return new LuaCustomClrObject(a - b);
+			}
+
+			throw new LuaException("Attempted to call CPos.Subtract(CPos, (CPos|CVec)) with invalid arguments ({0}, {1})".F(left.WrappedClrType().Name, rightType.Name));
 		}
 
 		public LuaValue Equals(LuaRuntime runtime, LuaValue left, LuaValue right)
 		{
 			CPos a, b;
-			if (!left.TryGetClrValue<CPos>(out a) || !right.TryGetClrValue<CPos>(out b))
+			if (!left.TryGetClrValue(out a) || !right.TryGetClrValue(out b))
 				return false;
 
 			return a == b;
@@ -106,6 +136,7 @@ namespace OpenRA
 				{
 					case "X": return X;
 					case "Y": return Y;
+					case "Layer": return Layer;
 					default: throw new LuaException("CPos does not define a member '{0}'".F(key));
 				}
 			}

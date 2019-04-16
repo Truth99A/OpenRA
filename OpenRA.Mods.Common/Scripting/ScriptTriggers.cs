@@ -1,17 +1,18 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Eluant;
+using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
 using OpenRA.Scripting;
 using OpenRA.Traits;
@@ -22,7 +23,8 @@ namespace OpenRA.Mods.Common.Scripting
 	{
 		OnIdle, OnDamaged, OnKilled, OnProduction, OnOtherProduction, OnPlayerWon, OnPlayerLost,
 		OnObjectiveAdded, OnObjectiveCompleted, OnObjectiveFailed, OnCapture, OnInfiltrated,
-		OnAddedToWorld, OnRemovedFromWorld, OnDiscovered, OnPlayerDiscovered
+		OnAddedToWorld, OnRemovedFromWorld, OnDiscovered, OnPlayerDiscovered,
+		OnPassengerEntered, OnPassengerExited, OnSold
 	}
 
 	[Desc("Allows map scripts to attach triggers to this actor via the Triggers global.")]
@@ -32,7 +34,8 @@ namespace OpenRA.Mods.Common.Scripting
 	}
 
 	public sealed class ScriptTriggers : INotifyIdle, INotifyDamage, INotifyKilled, INotifyProduction, INotifyOtherProduction,
-		INotifyObjectivesUpdated, INotifyCapture, INotifyInfiltrated, INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyDiscovered, INotifyActorDisposing
+		INotifyObjectivesUpdated, INotifyCapture, INotifyInfiltrated, INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyDiscovered, INotifyActorDisposing,
+		INotifyPassengerEntered, INotifyPassengerExited, INotifySold
 	{
 		readonly World world;
 		readonly Actor self;
@@ -40,10 +43,11 @@ namespace OpenRA.Mods.Common.Scripting
 		public event Action<Actor> OnKilledInternal = _ => { };
 		public event Action<Actor> OnCapturedInternal = _ => { };
 		public event Action<Actor> OnRemovedInternal = _ => { };
+		public event Action<Actor> OnAddedInternal = _ => { };
 		public event Action<Actor, Actor> OnProducedInternal = (a, b) => { };
 		public event Action<Actor, Actor> OnOtherProducedInternal = (a, b) => { };
 
-		readonly Dictionary<Trigger, List<Triggerable>> triggers = new Dictionary<Trigger, List<Triggerable>>();
+		readonly List<Triggerable>[] triggerables = Exts.MakeArray(Enum.GetValues(typeof(Trigger)).Length, _ => new List<Triggerable>());
 
 		struct Triggerable : IDisposable
 		{
@@ -68,27 +72,29 @@ namespace OpenRA.Mods.Common.Scripting
 		{
 			this.world = world;
 			this.self = self;
+		}
 
-			foreach (Trigger t in Enum.GetValues(typeof(Trigger)))
-				triggers.Add(t, new List<Triggerable>());
+		List<Triggerable> Triggerables(Trigger trigger)
+		{
+			return triggerables[(int)trigger];
 		}
 
 		public void RegisterCallback(Trigger trigger, LuaFunction func, ScriptContext context)
 		{
-			triggers[trigger].Add(new Triggerable(func, context, self));
+			Triggerables(trigger).Add(new Triggerable(func, context, self));
 		}
 
 		public bool HasAnyCallbacksFor(Trigger trigger)
 		{
-			return triggers[trigger].Count > 0;
+			return Triggerables(trigger).Count > 0;
 		}
 
-		public void TickIdle(Actor self)
+		void INotifyIdle.TickIdle(Actor self)
 		{
 			if (world.Disposing)
 				return;
 
-			foreach (var f in triggers[Trigger.OnIdle])
+			foreach (var f in Triggerables(Trigger.OnIdle))
 			{
 				try
 				{
@@ -102,12 +108,12 @@ namespace OpenRA.Mods.Common.Scripting
 			}
 		}
 
-		public void Damaged(Actor self, AttackInfo e)
+		void INotifyDamage.Damaged(Actor self, AttackInfo e)
 		{
 			if (world.Disposing)
 				return;
 
-			foreach (var f in triggers[Trigger.OnDamaged])
+			foreach (var f in Triggerables(Trigger.OnDamaged))
 			{
 				try
 				{
@@ -122,13 +128,13 @@ namespace OpenRA.Mods.Common.Scripting
 			}
 		}
 
-		public void Killed(Actor self, AttackInfo e)
+		void INotifyKilled.Killed(Actor self, AttackInfo e)
 		{
 			if (world.Disposing)
 				return;
 
 			// Run Lua callbacks
-			foreach (var f in triggers[Trigger.OnKilled])
+			foreach (var f in Triggerables(Trigger.OnKilled))
 			{
 				try
 				{
@@ -146,13 +152,13 @@ namespace OpenRA.Mods.Common.Scripting
 			OnKilledInternal(self);
 		}
 
-		public void UnitProduced(Actor self, Actor other, CPos exit)
+		void INotifyProduction.UnitProduced(Actor self, Actor other, CPos exit)
 		{
 			if (world.Disposing)
 				return;
 
 			// Run Lua callbacks
-			foreach (var f in triggers[Trigger.OnProduction])
+			foreach (var f in Triggerables(Trigger.OnProduction))
 			{
 				try
 				{
@@ -170,12 +176,12 @@ namespace OpenRA.Mods.Common.Scripting
 			OnProducedInternal(self, other);
 		}
 
-		public void OnPlayerWon(Player player)
+		void INotifyObjectivesUpdated.OnPlayerWon(Player player)
 		{
 			if (world.Disposing)
 				return;
 
-			foreach (var f in triggers[Trigger.OnPlayerWon])
+			foreach (var f in Triggerables(Trigger.OnPlayerWon))
 			{
 				try
 				{
@@ -190,12 +196,12 @@ namespace OpenRA.Mods.Common.Scripting
 			}
 		}
 
-		public void OnPlayerLost(Player player)
+		void INotifyObjectivesUpdated.OnPlayerLost(Player player)
 		{
 			if (world.Disposing)
 				return;
 
-			foreach (var f in triggers[Trigger.OnPlayerLost])
+			foreach (var f in Triggerables(Trigger.OnPlayerLost))
 			{
 				try
 				{
@@ -210,12 +216,12 @@ namespace OpenRA.Mods.Common.Scripting
 			}
 		}
 
-		public void OnObjectiveAdded(Player player, int id)
+		void INotifyObjectivesUpdated.OnObjectiveAdded(Player player, int id)
 		{
 			if (world.Disposing)
 				return;
 
-			foreach (var f in triggers[Trigger.OnObjectiveAdded])
+			foreach (var f in Triggerables(Trigger.OnObjectiveAdded))
 			{
 				try
 				{
@@ -231,12 +237,12 @@ namespace OpenRA.Mods.Common.Scripting
 			}
 		}
 
-		public void OnObjectiveCompleted(Player player, int id)
+		void INotifyObjectivesUpdated.OnObjectiveCompleted(Player player, int id)
 		{
 			if (world.Disposing)
 				return;
 
-			foreach (var f in triggers[Trigger.OnObjectiveCompleted])
+			foreach (var f in Triggerables(Trigger.OnObjectiveCompleted))
 			{
 				try
 				{
@@ -252,12 +258,12 @@ namespace OpenRA.Mods.Common.Scripting
 			}
 		}
 
-		public void OnObjectiveFailed(Player player, int id)
+		void INotifyObjectivesUpdated.OnObjectiveFailed(Player player, int id)
 		{
 			if (world.Disposing)
 				return;
 
-			foreach (var f in triggers[Trigger.OnObjectiveFailed])
+			foreach (var f in Triggerables(Trigger.OnObjectiveFailed))
 			{
 				try
 				{
@@ -273,12 +279,12 @@ namespace OpenRA.Mods.Common.Scripting
 			}
 		}
 
-		public void OnCapture(Actor self, Actor captor, Player oldOwner, Player newOwner)
+		void INotifyCapture.OnCapture(Actor self, Actor captor, Player oldOwner, Player newOwner, BitSet<CaptureType> captureTypes)
 		{
 			if (world.Disposing)
 				return;
 
-			foreach (var f in triggers[Trigger.OnCapture])
+			foreach (var f in Triggerables(Trigger.OnCapture))
 			{
 				try
 				{
@@ -298,12 +304,12 @@ namespace OpenRA.Mods.Common.Scripting
 			OnCapturedInternal(self);
 		}
 
-		public void Infiltrated(Actor self, Actor infiltrator)
+		void INotifyInfiltrated.Infiltrated(Actor self, Actor infiltrator, BitSet<TargetableType> types)
 		{
 			if (world.Disposing)
 				return;
 
-			foreach (var f in triggers[Trigger.OnInfiltrated])
+			foreach (var f in Triggerables(Trigger.OnInfiltrated))
 			{
 				try
 				{
@@ -318,12 +324,12 @@ namespace OpenRA.Mods.Common.Scripting
 			}
 		}
 
-		public void AddedToWorld(Actor self)
+		void INotifyAddedToWorld.AddedToWorld(Actor self)
 		{
 			if (world.Disposing)
 				return;
 
-			foreach (var f in triggers[Trigger.OnAddedToWorld])
+			foreach (var f in Triggerables(Trigger.OnAddedToWorld))
 			{
 				try
 				{
@@ -335,15 +341,18 @@ namespace OpenRA.Mods.Common.Scripting
 					return;
 				}
 			}
+
+			// Run any internally bound callbacks
+			OnAddedInternal(self);
 		}
 
-		public void RemovedFromWorld(Actor self)
+		void INotifyRemovedFromWorld.RemovedFromWorld(Actor self)
 		{
 			if (world.Disposing)
 				return;
 
 			// Run Lua callbacks
-			foreach (var f in triggers[Trigger.OnRemovedFromWorld])
+			foreach (var f in Triggerables(Trigger.OnRemovedFromWorld))
 			{
 				try
 				{
@@ -360,19 +369,41 @@ namespace OpenRA.Mods.Common.Scripting
 			OnRemovedInternal(self);
 		}
 
-		public void UnitProducedByOther(Actor self, Actor producee, Actor produced)
+		void INotifySold.Selling(Actor self) { }
+		void INotifySold.Sold(Actor self)
 		{
 			if (world.Disposing)
 				return;
 
 			// Run Lua callbacks
-			foreach (var f in triggers[Trigger.OnOtherProduction])
+			foreach (var f in Triggerables(Trigger.OnSold))
+			{
+				try
+				{
+					f.Function.Call(f.Self).Dispose();
+				}
+				catch (Exception ex)
+				{
+					f.Context.FatalError(ex.Message);
+					return;
+				}
+			}
+		}
+
+		void INotifyOtherProduction.UnitProducedByOther(Actor self, Actor producee, Actor produced, string productionType, TypeDictionary init)
+		{
+			if (world.Disposing)
+				return;
+
+			// Run Lua callbacks
+			foreach (var f in Triggerables(Trigger.OnOtherProduction))
 			{
 				try
 				{
 					using (var a = producee.ToLuaValue(f.Context))
 					using (var b = produced.ToLuaValue(f.Context))
-						f.Function.Call(a, b).Dispose();
+					using (var c = productionType.ToLuaValue(f.Context))
+						f.Function.Call(a, b, c).Dispose();
 				}
 				catch (Exception ex)
 				{
@@ -385,12 +416,12 @@ namespace OpenRA.Mods.Common.Scripting
 			OnOtherProducedInternal(producee, produced);
 		}
 
-		public void OnDiscovered(Actor self, Player discoverer, bool playNotification)
+		void INotifyDiscovered.OnDiscovered(Actor self, Player discoverer, bool playNotification)
 		{
 			if (world.Disposing)
 				return;
 
-			foreach (var f in triggers[Trigger.OnDiscovered])
+			foreach (var f in Triggerables(Trigger.OnDiscovered))
 			{
 				try
 				{
@@ -404,7 +435,7 @@ namespace OpenRA.Mods.Common.Scripting
 				}
 			}
 
-			foreach (var f in triggers[Trigger.OnPlayerDiscovered])
+			foreach (var f in Triggerables(Trigger.OnPlayerDiscovered))
 			{
 				try
 				{
@@ -420,11 +451,53 @@ namespace OpenRA.Mods.Common.Scripting
 			}
 		}
 
+		void INotifyPassengerEntered.OnPassengerEntered(Actor self, Actor passenger)
+		{
+			if (world.Disposing)
+				return;
+
+			foreach (var f in Triggerables(Trigger.OnPassengerEntered))
+			{
+				try
+				{
+					using (var trans = self.ToLuaValue(f.Context))
+					using (var pass = passenger.ToLuaValue(f.Context))
+						f.Function.Call(trans, pass).Dispose();
+				}
+				catch (Exception ex)
+				{
+					f.Context.FatalError(ex.Message);
+					return;
+				}
+			}
+		}
+
+		void INotifyPassengerExited.OnPassengerExited(Actor self, Actor passenger)
+		{
+			if (world.Disposing)
+				return;
+
+			foreach (var f in Triggerables(Trigger.OnPassengerExited))
+			{
+				try
+				{
+					using (var trans = self.ToLuaValue(f.Context))
+					using (var pass = passenger.ToLuaValue(f.Context))
+						f.Function.Call(trans, pass).Dispose();
+				}
+				catch (Exception ex)
+				{
+					f.Context.FatalError(ex.Message);
+					return;
+				}
+			}
+		}
+
 		public void Clear(Trigger trigger)
 		{
 			world.AddFrameEndTask(w =>
 			{
-				var triggerables = triggers[trigger];
+				var triggerables = Triggerables(trigger);
 				foreach (var f in triggerables)
 					f.Dispose();
 				triggerables.Clear();
@@ -437,7 +510,7 @@ namespace OpenRA.Mods.Common.Scripting
 				Clear(t);
 		}
 
-		public void Disposing(Actor self)
+		void INotifyActorDisposing.Disposing(Actor self)
 		{
 			ClearAll();
 		}

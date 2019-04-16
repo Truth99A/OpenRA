@@ -1,17 +1,18 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
-using System.Drawing;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Primitives;
 
 namespace OpenRA.Widgets
 {
@@ -64,12 +65,17 @@ namespace OpenRA.Widgets
 
 		public static void FillRectWithColor(Rectangle r, Color c)
 		{
-			Game.Renderer.RgbaColorRenderer.FillRect(new float2(r.Left, r.Top), new float2(r.Right, r.Bottom), c);
+			// Offset to the edges of the pixels
+			var tl = new float2(r.Left - 0.5f, r.Top - 0.5f);
+			var br = new float2(r.Right - 0.5f, r.Bottom - 0.5f);
+			Game.Renderer.RgbaColorRenderer.FillRect(tl, br, c);
 		}
 
 		public static void FillEllipseWithColor(Rectangle r, Color c)
 		{
-			Game.Renderer.RgbaColorRenderer.FillEllipse(new RectangleF(r.X, r.Y, r.Width, r.Height), c);
+			var tl = new float2(r.Left, r.Top);
+			var br = new float2(r.Right, r.Bottom);
+			Game.Renderer.RgbaColorRenderer.FillEllipse(tl, br, c);
 		}
 
 		public static int[] GetBorderSizes(string collection)
@@ -200,29 +206,29 @@ namespace OpenRA.Widgets
 				for (var i = 0; i < lines.Count; i++)
 				{
 					var line = lines[i];
-					var m = font.Measure(line);
-
-					if (m.X <= width)
+					if (font.Measure(line).X <= width)
 						continue;
 
-					var bestSpaceIndex = -1;
-					var start = line.Length - 1;
-
-					while (m.X > width)
+					// Scan forwards until we find the last word that fits
+					// This guarantees a small bound on the amount of string we need to search before a linebreak
+					var start = 0;
+					while (true)
 					{
-						var spaceIndex = line.LastIndexOf(' ', start);
+						var spaceIndex = line.IndexOf(' ', start);
 						if (spaceIndex == -1)
 							break;
-						bestSpaceIndex = spaceIndex;
 
-						start = spaceIndex - 1;
-						m = font.Measure(line.Substring(0, spaceIndex));
+						var fragmentWidth = font.Measure(line.Substring(0, spaceIndex)).X;
+						if (fragmentWidth > width)
+							break;
+
+						start = spaceIndex + 1;
 					}
 
-					if (bestSpaceIndex != -1)
+					if (start > 0)
 					{
-						lines[i] = line.Substring(0, bestSpaceIndex);
-						lines.Insert(i + 1, line.Substring(bestSpaceIndex + 1));
+						lines[i] = line.Substring(0, start - 1);
+						lines.Insert(i + 1, line.Substring(start));
 					}
 				}
 
@@ -248,18 +254,9 @@ namespace OpenRA.Widgets
 			return trimmed;
 		}
 
-		public static Action Once(Action a) { return () => { if (a != null) { a(); a = null; } }; }
-
-		public static string ChooseInitialMap(string initialUid)
+		public static Color GetContrastColor(Color fgColor, Color bgDark, Color bgLight)
 		{
-			if (string.IsNullOrEmpty(initialUid) || Game.ModData.MapCache[initialUid].Status != MapStatus.Available)
-			{
-				var selected = Game.ModData.MapCache.Where(x => x.SuitableForInitialMap).RandomOrDefault(Game.CosmeticRandom) ??
-					Game.ModData.MapCache.First(m => m.Status == MapStatus.Available && m.Map.Visibility.HasFlag(MapVisibility.Lobby));
-				return selected.Uid;
-			}
-
-			return initialUid;
+			return fgColor == Color.White || fgColor.GetBrightness() > 0.33 ? bgDark : bgLight;
 		}
 	}
 

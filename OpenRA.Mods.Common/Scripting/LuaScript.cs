@@ -1,14 +1,14 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
@@ -30,26 +30,26 @@ namespace OpenRA.Mods.Common.Scripting
 	{
 		readonly LuaScriptInfo info;
 		ScriptContext context;
+		bool disposed;
 
 		public LuaScript(LuaScriptInfo info)
 		{
 			this.info = info;
 		}
 
-		public void WorldLoaded(World world, WorldRenderer worldRenderer)
+		void IWorldLoaded.WorldLoaded(World world, WorldRenderer worldRenderer)
 		{
 			var scripts = info.Scripts ?? Enumerable.Empty<string>();
 			context = new ScriptContext(world, worldRenderer, scripts);
 			context.WorldLoaded();
 		}
 
-		public void Tick(Actor self)
+		void ITick.Tick(Actor self)
 		{
 			context.Tick(self);
 		}
 
-		bool disposed;
-		public void Disposing(Actor self)
+		void INotifyActorDisposing.Disposing(Actor self)
 		{
 			if (disposed)
 				return;

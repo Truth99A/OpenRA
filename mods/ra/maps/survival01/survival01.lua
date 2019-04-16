@@ -1,6 +1,14 @@
-Difficulty = Map.Difficulty
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
+Difficulty = Map.LobbyOption("difficulty")
 
-if Difficulty == "Easy" then
+if Difficulty == "easy" then
 	AttackAtFrameIncrement = DateTime.Seconds(22)
 	AttackAtFrameIncrementInf = DateTime.Seconds(16)
 	TimerTicks = DateTime.Minutes(15)
@@ -8,7 +16,7 @@ if Difficulty == "Easy" then
 	DamageModifier = 0.5
 	LongBowReinforcements = { "heli", "heli" }
 	ParadropArtillery = true
-elseif Difficulty == "Medium" then
+elseif Difficulty == "normal" then
 	AttackAtFrameIncrement = DateTime.Seconds(18)
 	AttackAtFrameIncrementInf = DateTime.Seconds(12)
 	TimerTicks = DateTime.Minutes(20)
@@ -16,7 +24,7 @@ elseif Difficulty == "Medium" then
 	MoreParas = true
 	DamageModifier = 0.75
 	LongBowReinforcements = { "heli", "heli" }
-else --Difficulty == "Hard"
+else --Difficulty == "hard"
 	AttackAtFrameIncrement = DateTime.Seconds(14)
 	AttackAtFrameIncrementInf = DateTime.Seconds(8)
 	TimerTicks = DateTime.Minutes(25)
@@ -30,8 +38,8 @@ end
 
 AlliedAirReinforcementsWaypoints =
 {
-	{ AirReinforcementsEntry1.Location, AirReinforcementsEntry2.Location },
-	{ AirReinforcementsRally1.Location, AirReinforcementsRally2.Location }
+	{ AirReinforcementsEntry1.Location, AirReinforcementsRally1.Location },
+	{ AirReinforcementsEntry2.Location, AirReinforcementsRally2.Location }
 }
 FrenchReinforcements = { "2tnk", "2tnk", "2tnk", "2tnk", "2tnk", "1tnk", "1tnk", "1tnk", "arty", "arty", "arty", "jeep", "jeep" }
 
@@ -66,45 +74,38 @@ SovietBuildings = { Barrack1, SubPen, RadarDome, AdvancedPowerPlant1, AdvancedPo
 IdleTrigger = function(units, dest)
 	Utils.Do(units, function(unit)
 
-		Trigger.OnIdle(unit, function()
-			local bool = Utils.All(units, function(unit) return unit.IsIdle end)
-			if bool then
-				Utils.Do(units, function(unit)
-					if not unit.IsDead then
-						Trigger.ClearAll(unit)
-						Trigger.AfterDelay(0, function()
-							if not unit.IsDead then
-								if dest then unit.AttackMove(dest, 3) end
-								Trigger.OnIdle(unit, unit.Hunt)
-								Trigger.OnCapture(unit, function()
-									Trigger.ClearAll(unit)
-								end)
-							end
-						end)
-					end
-				end)
-			end
-		end)
+		if not unit.IsDead then
+			Trigger.OnIdle(unit, function()
+				local bool = Utils.All(units, function(unit) return unit.IsIdle end)
+				if bool then
+					SetupHuntTrigger(units)
+				end
+			end)
 
-		Trigger.OnDamaged(unit, function()
-			Utils.Do(units, function(unit)
+			Trigger.OnDamaged(unit, function()
+				SetupHuntTrigger(units)
+			end)
+
+			Trigger.OnCapture(unit, function()
+				Trigger.ClearAll(unit)
+			end)
+		end
+	end)
+end
+
+SetupHuntTrigger = function(units)
+	Utils.Do(units, function(unit)
+		if not unit.IsDead then
+			Trigger.ClearAll(unit)
+			Trigger.AfterDelay(0, function()
 				if not unit.IsDead then
-					Trigger.ClearAll(unit)
-					Trigger.AfterDelay(0, function()
-						if not unit.IsDead then
-							Trigger.OnIdle(unit, unit.Hunt)
-							Trigger.OnCapture(unit, function()
-								Trigger.ClearAll(unit)
-							end)
-						end
+					Trigger.OnIdle(unit, unit.Hunt)
+					Trigger.OnCapture(unit, function()
+						Trigger.ClearAll(unit)
 					end)
 				end
 			end)
-		end)
-
-		Trigger.OnCapture(unit, function()
-			Trigger.ClearAll(unit)
-		end)
+		end
 	end)
 end
 
@@ -382,7 +383,7 @@ SetupSoviets = function()
 	end)
 
 	Trigger.AfterDelay(0, function()
-		local buildings = Map.ActorsInBox(Map.TopLeft, Map.BottomRight, function(self) return self.Owner == soviets and self.HasProperty("StartBuildingRepairs") end)
+		local buildings = Utils.Where(Map.ActorsInWorld, function(self) return self.Owner == soviets and self.HasProperty("StartBuildingRepairs") end)
 		Utils.Do(buildings, function(actor)
 			Trigger.OnDamaged(actor, function(building)
 				if building.Owner == soviets and building.Health < building.MaxHealth * DamageModifier then

@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -14,11 +15,11 @@ namespace OpenRA.Mods.Common.UtilityCommands
 {
 	class Rgba2Hex : IUtilityCommand
 	{
-		public string Name { get { return "--rgba2hex"; } }
+		string IUtilityCommand.Name { get { return "--rgba2hex"; } }
 
 		static readonly char[] Comma = new char[] { ',' };
 
-		public bool ValidateArguments(string[] args)
+		bool IUtilityCommand.ValidateArguments(string[] args)
 		{
 			if (args.Length <= 1)
 				return PrintUsage();
@@ -73,7 +74,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 		}
 
 		[Desc("Convert r,g,b[,a] triples/quads into hex colors")]
-		public void Run(ModData modData, string[] args)
+		void IUtilityCommand.Run(Utility utility, string[] args)
 		{
 			for (int i = 1; i < args.Length;)
 			{
@@ -103,11 +104,11 @@ namespace OpenRA.Mods.Common.UtilityCommands
 
 	class Argb2Hex : IUtilityCommand
 	{
-		public string Name { get { return "--argb2hex"; } }
+		string IUtilityCommand.Name { get { return "--argb2hex"; } }
 
 		static readonly char[] Comma = new char[] { ',' };
 
-		public bool ValidateArguments(string[] args)
+		bool IUtilityCommand.ValidateArguments(string[] args)
 		{
 			if (args.Length <= 1)
 				return PrintUsage();
@@ -179,7 +180,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 		}
 
 		[Desc("Convert a,r,g,b legacy colors into hex colors")]
-		public void Run(ModData modData, string[] args)
+		void IUtilityCommand.Run(Utility utility, string[] args)
 		{
 			for (int i = 1; i < args.Length;)
 			{

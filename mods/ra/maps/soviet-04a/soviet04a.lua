@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 
 RunInitialActivities = function()
 	Harvester.FindResources()
@@ -83,7 +91,7 @@ RunInitialActivities = function()
 	Trigger.AfterDelay(DateTime.Minutes(1), ProduceInfantry)
 	Trigger.AfterDelay(DateTime.Minutes(2), ProduceArmor)
 
-	if Map.Difficulty == "Hard" or Map.Difficulty == "Medium" then
+	if Map.LobbyOption("difficulty") == "hard" or Map.LobbyOption("difficulty") == "normal" then
 		Trigger.AfterDelay(DateTime.Seconds(15), ReinfInf)
 	end
 	Trigger.AfterDelay(DateTime.Minutes(1), ReinfInf)
@@ -108,9 +116,9 @@ Tick = function()
 
 	if RCheck then
 		RCheck = false
-		if Map.Difficulty == "Hard" then
+		if Map.LobbyOption("difficulty") == "hard" then
 			Trigger.AfterDelay(DateTime.Seconds(150), ReinfArmor)
-		elseif Map.Difficulty == "Medium" then
+		elseif Map.LobbyOption("difficulty") == "normal" then
 			Trigger.AfterDelay(DateTime.Minutes(5), ReinfArmor)
 		else
 			Trigger.AfterDelay(DateTime.Minutes(8), ReinfArmor)
@@ -146,7 +154,7 @@ WorldLoaded = function()
 		Media.PlaySpeechNotification(player, "Win")
 	end)
 
-	Trigger.OnKilled(Radar, function()
+	Trigger.OnKilled(RadarDome, function()
 		player.MarkCompletedObjective(KillRadar)
 		Media.PlaySpeechNotification(player, "ObjectiveMet")
 	end)

@@ -1,17 +1,16 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using OpenRA.Scripting;
 using OpenRA.Traits;
 
@@ -19,20 +18,20 @@ namespace OpenRA.Mods.Common.UtilityCommands
 {
 	class ExtractLuaDocsCommand : IUtilityCommand
 	{
-		public string Name { get { return "--lua-docs"; } }
+		string IUtilityCommand.Name { get { return "--lua-docs"; } }
 
-		public bool ValidateArguments(string[] args)
+		bool IUtilityCommand.ValidateArguments(string[] args)
 		{
 			return true;
 		}
 
 		[Desc("Generate Lua API documentation in MarkDown format.")]
-		public void Run(ModData modData, string[] args)
+		void IUtilityCommand.Run(Utility utility, string[] args)
 		{
 			// HACK: The engine code assumes that Game.modData is set.
-			Game.ModData = modData;
+			Game.ModData = utility.ModData;
 
-			Console.WriteLine("This is an automatically generated listing of the new Lua map scripting API, generated for {0} of OpenRA.", Game.ModData.Manifest.Mod.Version);
+			Console.WriteLine("This is an automatically generated listing of the new Lua map scripting API, generated for {0} of OpenRA.", Game.ModData.Manifest.Metadata.Version);
 			Console.WriteLine();
 			Console.WriteLine("OpenRA allows custom maps and missions to be scripted using Lua 5.1.\n" +
 				"These scripts run in a sandbox that prevents access to unsafe functions (e.g. OS or file access), " +
@@ -53,8 +52,10 @@ namespace OpenRA.Mods.Common.UtilityCommands
 				"* Individual players expose a collection of properties and commands that query information or modify their state.\n" +
 				"The properties and commands available on each actor depends on the traits that the actor specifies in its rule definitions.\n");
 			Console.WriteLine();
+			Console.WriteLine("For a basic guide about map scripts see the [`Map Scripting` wiki page](https://github.com/OpenRA/OpenRA/wiki/Map-scripting).");
+			Console.WriteLine();
 
-			var tables = Game.ModData.ObjectCreator.GetTypesImplementing<ScriptGlobal>()
+			var tables = utility.ModData.ObjectCreator.GetTypesImplementing<ScriptGlobal>()
 				.OrderBy(t => t.Name);
 
 			Console.WriteLine("<h3>Global Tables</h3>");
@@ -76,7 +77,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 
 			Console.WriteLine("<h3>Actor Properties / Commands</h3>");
 
-			var actorCategories = Game.ModData.ObjectCreator.GetTypesImplementing<ScriptActorProperties>().SelectMany(cg =>
+			var actorCategories = utility.ModData.ObjectCreator.GetTypesImplementing<ScriptActorProperties>().SelectMany(cg =>
 			{
 				var catAttr = cg.GetCustomAttributes<ScriptPropertyGroupAttribute>(false).FirstOrDefault();
 				var category = catAttr != null ? catAttr.Category : "Unsorted";
@@ -121,7 +122,7 @@ namespace OpenRA.Mods.Common.UtilityCommands
 
 			Console.WriteLine("<h3>Player Properties / Commands</h3>");
 
-			var playerCategories = Game.ModData.ObjectCreator.GetTypesImplementing<ScriptPlayerProperties>().SelectMany(cg =>
+			var playerCategories = utility.ModData.ObjectCreator.GetTypesImplementing<ScriptPlayerProperties>().SelectMany(cg =>
 			{
 				var catAttr = cg.GetCustomAttributes<ScriptPropertyGroupAttribute>(false).FirstOrDefault();
 				var category = catAttr != null ? catAttr.Category : "Unsorted";

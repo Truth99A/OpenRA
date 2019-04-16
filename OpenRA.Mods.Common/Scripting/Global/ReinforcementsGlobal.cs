@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -15,6 +16,7 @@ using Eluant;
 using OpenRA.Activities;
 using OpenRA.Effects;
 using OpenRA.Mods.Common.Activities;
+using OpenRA.Mods.Common.Effects;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
 using OpenRA.Scripting;
@@ -25,7 +27,13 @@ namespace OpenRA.Mods.Common.Scripting
 	[ScriptGlobal("Reinforcements")]
 	public class ReinforcementsGlobal : ScriptGlobal
 	{
-		public ReinforcementsGlobal(ScriptContext context) : base(context) { }
+		readonly DomainIndex domainIndex;
+
+		public ReinforcementsGlobal(ScriptContext context)
+			: base(context)
+		{
+			domainIndex = context.World.WorldActor.Trait<DomainIndex>();
+		}
 
 		Actor CreateActor(Player owner, string actorType, bool addToWorld, CPos? entryLocation = null, CPos? nextLocation = null)
 		{
@@ -65,34 +73,33 @@ namespace OpenRA.Mods.Common.Scripting
 			"The first member of the entryPath array will be the units' spawnpoint, " +
 			"while the last one will be their destination. If actionFunc is given, " +
 			"it will be executed once a unit has reached its destination. actionFunc " +
-			"will be called as actionFunc(Actor actor)")]
+			"will be called as actionFunc(Actor actor). " +
+			"Returns a table containing the deployed units.")]
 		public Actor[] Reinforce(Player owner, string[] actorTypes, CPos[] entryPath, int interval = 25, LuaFunction actionFunc = null)
 		{
 			var actors = new List<Actor>();
 			for (var i = 0; i < actorTypes.Length; i++)
 			{
-				var af = actionFunc != null ? actionFunc.CopyReference() as LuaFunction : null;
+				var af = actionFunc != null ? (LuaFunction)actionFunc.CopyReference() : null;
 				var actor = CreateActor(owner, actorTypes[i], false, entryPath[0], entryPath.Length > 1 ? entryPath[1] : (CPos?)null);
 				actors.Add(actor);
 
 				var actionDelay = i * interval;
-				Action actorAction = () =>
+				Activity queuedActivity = null;
+				if (af != null)
 				{
-					Context.World.Add(actor);
-					for (var j = 1; j < entryPath.Length; j++)
-						Move(actor, entryPath[j]);
-
-					if (af != null)
+					queuedActivity = new CallFunc(() =>
 					{
-						actor.QueueActivity(new CallFunc(() =>
-						{
-							af.Call(actor.ToLuaValue(Context));
-							af.Dispose();
-						}));
-					}
-				};
+						using (af)
+						using (var a = actor.ToLuaValue(Context))
+							af.Call(a);
+					});
+				}
 
-				Context.World.AddFrameEndTask(w => w.Add(new DelayedAction(actionDelay, actorAction)));
+				// We need to exclude the spawn location from the movement path
+				var path = entryPath.Skip(1).ToArray();
+
+				Context.World.AddFrameEndTask(w => w.Add(new SpawnActorEffect(actor, actionDelay, path, queuedActivity)));
 			}
 
 			return actors.ToArray();
@@ -105,9 +112,13 @@ namespace OpenRA.Mods.Common.Scripting
 			"has reached the destination, it will unload its cargo unless a custom actionFunc has " +
 			"been supplied. Afterwards, the transport will follow the exitPath and leave the map, " +
 			"unless a custom exitFunc has been supplied. actionFunc will be called as " +
-			"actionFunc(Actor transport, Actor[] cargo). exitFunc will be called as exitFunc(Actor transport).")]
+			"actionFunc(Actor transport, Actor[] cargo). exitFunc will be called as exitFunc(Actor transport). " +
+			"dropRange determines how many cells away the transport will try to land " +
+			"if the actual destination is blocked (if the transport is an aircraft). " +
+			"Returns a table in which the first value is the transport, " +
+			"and the second a table containing the deployed units.")]
 		public LuaTable ReinforceWithTransport(Player owner, string actorType, string[] cargoTypes, CPos[] entryPath, CPos[] exitPath = null,
-			LuaFunction actionFunc = null, LuaFunction exitFunc = null)
+			LuaFunction actionFunc = null, LuaFunction exitFunc = null, int dropRange = 3)
 		{
 			var transport = CreateActor(owner, actorType, true, entryPath[0], entryPath.Length > 1 ? entryPath[1] : (CPos?)null);
 			var cargo = transport.TraitOrDefault<Cargo>();
@@ -128,26 +139,55 @@ namespace OpenRA.Mods.Common.Scripting
 
 			if (actionFunc != null)
 			{
-				var af = actionFunc.CopyReference() as LuaFunction;
+				var af = (LuaFunction)actionFunc.CopyReference();
 				transport.QueueActivity(new CallFunc(() =>
 				{
-					af.Call(transport.ToLuaValue(Context), passengers.ToArray().ToLuaValue(Context));
-					af.Dispose();
+					using (af)
+					using (LuaValue t = transport.ToLuaValue(Context), p = passengers.ToArray().ToLuaValue(Context))
+						af.Call(t, p);
 				}));
 			}
 			else
 			{
-				var aircraftInfo = transport.TraitOrDefault<Aircraft>();
-				if (aircraftInfo != null)
+				var aircraft = transport.TraitOrDefault<Aircraft>();
+				if (aircraft != null)
 				{
-					if (!aircraftInfo.IsPlane)
+					var destination = entryPath.Last();
+
+					// Try to find an alternative landing spot if we can't land at the current destination
+					if (!aircraft.CanLand(destination) && dropRange > 0)
 					{
-						transport.QueueActivity(new Turn(transport, aircraftInfo.Info.InitialFacing));
+						var locomotors = cargo.Passengers
+							.Select(a => a.Info.TraitInfoOrDefault<MobileInfo>())
+							.Where(m => m != null)
+							.Distinct()
+							.Select(m => m.LocomotorInfo)
+							.ToList();
+
+						foreach (var c in transport.World.Map.FindTilesInCircle(destination, dropRange))
+						{
+							if (!aircraft.CanLand(c))
+								continue;
+
+							if (!locomotors.All(m => domainIndex.IsPassable(destination, c, m)))
+								continue;
+
+							destination = c;
+							break;
+						}
+					}
+
+					if (aircraft.Info.VTOL)
+					{
+						if (destination != entryPath.Last())
+							Move(transport, destination);
+
+						transport.QueueActivity(new Turn(transport, aircraft.Info.InitialFacing));
 						transport.QueueActivity(new HeliLand(transport, true));
 					}
 					else
 					{
-						transport.QueueActivity(new Land(transport, Target.FromCell(transport.World, entryPath.Last())));
+						transport.QueueActivity(new Land(transport, Target.FromCell(transport.World, destination)));
 					}
 
 					transport.QueueActivity(new Wait(15));
@@ -159,16 +199,17 @@ namespace OpenRA.Mods.Common.Scripting
 					transport.QueueActivity(new WaitFor(() => cargo.IsEmpty(transport)));
 				}
 
-				transport.QueueActivity(new Wait(aircraftInfo != null ? 50 : 25));
+				transport.QueueActivity(new Wait(aircraft != null ? 50 : 25));
 			}
 
 			if (exitFunc != null)
 			{
-				var ef = exitFunc.CopyReference() as LuaFunction;
+				var ef = (LuaFunction)exitFunc.CopyReference();
 				transport.QueueActivity(new CallFunc(() =>
 				{
-					ef.Call(transport.ToLuaValue(Context));
-					ef.Dispose();
+					using (ef)
+					using (var t = transport.ToLuaValue(Context))
+						ef.Call(t);
 				}));
 			}
 			else if (exitPath != null)
@@ -180,8 +221,16 @@ namespace OpenRA.Mods.Common.Scripting
 			}
 
 			var ret = Context.CreateTable();
-			ret.Add(1, transport.ToLuaValue(Context));
-			ret.Add(2, passengers.ToArray().ToLuaValue(Context));
+			using (LuaValue
+				tKey = 1,
+				tValue = transport.ToLuaValue(Context),
+				pKey = 2,
+				pValue = passengers.ToArray().ToLuaValue(Context))
+			{
+				ret.Add(tKey, tValue);
+				ret.Add(pKey, pValue);
+			}
+
 			return ret;
 		}
 	}

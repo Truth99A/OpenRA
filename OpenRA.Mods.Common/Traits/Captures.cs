@@ -1,50 +1,78 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System.Collections.Generic;
-using System.Drawing;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("This actor can capture other actors which have the Capturable: trait.")]
-	public class CapturesInfo : ITraitInfo
+	public class CapturesInfo : ConditionalTraitInfo, Requires<CaptureManagerInfo>
 	{
+		[FieldLoader.Require]
 		[Desc("Types of actors that it can capture, as long as the type also exists in the Capturable Type: trait.")]
-		public readonly HashSet<string> CaptureTypes = new HashSet<string> { "building" };
-		[Desc("Unit will do damage to the actor instead of capturing it. Unit is destroyed when sabotaging.")]
-		public readonly bool Sabotage = true;
-		[Desc("Only used if Sabotage=true. Sabotage damage expressed as a percentage of enemy health removed.")]
-		public readonly float SabotageHPRemoval = 0.5f;
+		public readonly BitSet<CaptureType> CaptureTypes = default(BitSet<CaptureType>);
+
+		[Desc("Targets with health above this percentage will be sabotaged instead of captured.",
+			"Set to 0 to disable sabotaging.")]
+		public readonly int SabotageThreshold = 0;
+
+		[Desc("Sabotage damage expressed as a percentage of maximum target health.")]
+		public readonly int SabotageHPRemoval = 50;
+
+		[Desc("Damage types that applied with the sabotage damage.")]
+		public readonly BitSet<DamageType> SabotageDamageTypes = default(BitSet<DamageType>);
+
+		[Desc("Delay (in ticks) that to wait next to the target before initiating the capture.")]
+		public readonly int CaptureDelay = 0;
+
+		[Desc("Enter the target actor and be consumed by the capture.")]
+		public readonly bool ConsumedByCapture = true;
+
+		[Desc("Experience granted to the capturing player.")]
+		public readonly int PlayerExperience = 0;
+
+		[Desc("Stance that the structure's previous owner needs to have for the capturing player to receive Experience.")]
+		public readonly Stance PlayerExperienceStances = Stance.Enemy;
+
+		public readonly string SabotageCursor = "capture";
+		public readonly string EnterCursor = "enter";
+		public readonly string EnterBlockedCursor = "enter-blocked";
 
 		[VoiceReference] public readonly string Voice = "Action";
 
-		public object Create(ActorInitializer init) { return new Captures(init.Self, this); }
+		public override object Create(ActorInitializer init) { return new Captures(init.Self, this); }
 	}
 
-	public class Captures : IIssueOrder, IResolveOrder, IOrderVoice
+	public class Captures : ConditionalTrait<CapturesInfo>, IIssueOrder, IResolveOrder, IOrderVoice
 	{
-		public readonly CapturesInfo Info;
+		readonly CaptureManager captureManager;
 
 		public Captures(Actor self, CapturesInfo info)
+			: base(info)
 		{
-			Info = info;
+			captureManager = self.Trait<CaptureManager>();
 		}
 
 		public IEnumerable<IOrderTargeter> Orders
 		{
 			get
 			{
-				yield return new CaptureOrderTargeter(Info.Sabotage);
+				if (IsTraitDisabled)
+					yield break;
+
+				yield return new CaptureOrderTargeter(this);
 			}
 		}
 
@@ -53,10 +81,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (order.OrderID != "CaptureActor")
 				return null;
 
-			if (target.Type == TargetType.FrozenActor)
-				return new Order(order.OrderID, self, queued) { ExtraData = target.FrozenActor.ID };
-
-			return new Order(order.OrderID, self, queued) { TargetActor = target.Actor };
+			return new Order(order.OrderID, self, target, queued);
 		}
 
 		public string VoicePhraseForOrder(Actor self, Order order)
@@ -66,61 +91,69 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "CaptureActor")
-				return;
-
-			var target = self.ResolveFrozenActorOrder(order, Color.Red);
-			if (target.Type != TargetType.Actor)
+			if (order.OrderString != "CaptureActor" || IsTraitDisabled)
 				return;
 
 			if (!order.Queued)
 				self.CancelActivity();
 
-			self.SetTargetLine(target, Color.Red);
-			self.QueueActivity(new CaptureActor(self, target.Actor));
+			self.SetTargetLine(order.Target, Color.Red);
+			self.QueueActivity(new CaptureActor(self, order.Target));
 		}
+
+		protected override void TraitEnabled(Actor self) { captureManager.RefreshCaptures(self); }
+		protected override void TraitDisabled(Actor self) { captureManager.RefreshCaptures(self); }
 
 		class CaptureOrderTargeter : UnitOrderTargeter
 		{
-			readonly bool sabotage;
+			readonly Captures captures;
 
-			public CaptureOrderTargeter(bool sabotage)
-				: base("CaptureActor", 6, "enter", true, true)
+			public CaptureOrderTargeter(Captures captures)
+				: base("CaptureActor", 6, captures.Info.EnterCursor, true, true)
 			{
-				this.sabotage = sabotage;
+				this.captures = captures;
 			}
 
 			public override bool CanTargetActor(Actor self, Actor target, TargetModifiers modifiers, ref string cursor)
 			{
-				var c = target.Info.TraitInfoOrDefault<CapturableInfo>();
-				if (c == null || !c.CanBeTargetedBy(self, target.Owner))
+				var captureManager = target.TraitOrDefault<CaptureManager>();
+				if (captureManager == null || !captureManager.CanBeTargetedBy(target, self, captures))
 				{
-					cursor = "enter-blocked";
+					cursor = captures.Info.EnterBlockedCursor;
 					return false;
 				}
 
-				var health = target.Trait<Health>();
-				var lowEnoughHealth = health.HP <= c.CaptureThreshold * health.MaxHP;
+				cursor = captures.Info.EnterCursor;
+				if (captures.Info.SabotageThreshold > 0 && !target.Owner.NonCombatant)
+				{
+					var health = target.Trait<IHealth>();
 
-				cursor = !sabotage || lowEnoughHealth || target.Owner.NonCombatant
-					? "enter" : "capture";
+					// Sabotage instead of capture
+					if ((long)health.HP * 100 > captures.Info.SabotageThreshold * (long)health.MaxHP)
+						cursor = captures.Info.SabotageCursor;
+				}
+
 				return true;
 			}
 
 			public override bool CanTargetFrozenActor(Actor self, FrozenActor target, TargetModifiers modifiers, ref string cursor)
 			{
-				var c = target.Info.TraitInfoOrDefault<CapturableInfo>();
-				if (c == null || !c.CanBeTargetedBy(self, target.Owner))
+				var captureManagerInfo = target.Info.TraitInfoOrDefault<CaptureManagerInfo>();
+				if (captureManagerInfo == null || !captureManagerInfo.CanBeTargetedBy(target, self, captures))
 				{
-					cursor = "enter-blocked";
+					cursor = captures.Info.EnterBlockedCursor;
 					return false;
 				}
 
-				var health = target.Info.TraitInfoOrDefault<HealthInfo>();
-				var lowEnoughHealth = target.HP <= c.CaptureThreshold * health.HP;
+				cursor = captures.Info.EnterCursor;
+				if (captures.Info.SabotageThreshold > 0 && !target.Owner.NonCombatant)
+				{
+					var healthInfo = target.Info.TraitInfoOrDefault<IHealthInfo>();
 
-				cursor = !sabotage || lowEnoughHealth || target.Owner.NonCombatant
-					? "enter" : "capture";
+					// Sabotage instead of capture
+					if ((long)target.HP * 100 > captures.Info.SabotageThreshold * (long)healthInfo.MaxHP)
+						cursor = captures.Info.SabotageCursor;
+				}
 
 				return true;
 			}

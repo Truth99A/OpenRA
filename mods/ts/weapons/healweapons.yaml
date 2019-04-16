@@ -1,32 +1,22 @@
-Heal:
+^HealWeapon:
 	ReloadDelay: 80
 	Range: 2c849
-	Report: HEALER1.AUD
-	ValidTargets: Infantry
-	Projectile: Bullet
-		Speed: 1c682
-	Warhead@1Dam: SpreadDamage
+	Report: healer1.aud
+	ValidTargets: Heal
+	TargetActorCenter: true
+	Projectile: InstantHit
+	Warhead@1Dam: TargetDamage
 		DebugOverlayColor: 00FF00
-		Spread: 213
-		Damage: -50
-		ValidTargets: Infantry
+		Damage: -5000
+		ValidTargets: Heal
+
+Heal:
+	Inherits: ^HealWeapon
 
 Repair:
-	ReloadDelay: 80
+	Inherits: ^HealWeapon
 	Range: 1c819
-	Report: REPAIR11.AUD
+	Report: repair11.aud
 	ValidTargets: Repair
-	Projectile: Bullet
-		Speed: 1c682
-	Warhead@1Dam: SpreadDamage
-		DebugOverlayColor: 00FF00
-		Spread: 213
-		Damage: -50
+	Warhead@1Dam: TargetDamage
 		ValidTargets: Repair
-
-TiberiumHeal:
-	ReloadDelay: 16
-	Warhead@1Dam: SpreadDamage
-		Spread: 42
-		Damage: -2
-

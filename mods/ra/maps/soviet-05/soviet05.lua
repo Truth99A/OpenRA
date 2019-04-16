@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 CheckForBase = function()
 	baseBuildings = Map.ActorsInBox(Map.TopLeft, CFBPoint.CenterPosition, function(actor)
 		return actor.Type == "fact" or actor.Type == "powr"
@@ -15,15 +23,11 @@ CheckForCYard = function()
 end
 
 CheckForSPen = function()
-	SPens = Map.ActorsInBox(Map.TopLeft, Map.BottomRight, function(actor)
-		return actor.Type == "spen"
-	end)
-
-	return #SPens >=1
+	return Utils.Any(Map.ActorsInWorld, function(actor) return actor.Type == "spen" end)
 end
 
 RunInitialActivities = function()
-	if Map.Difficulty == "Hard" then
+	if Map.LobbyOption("difficulty") == "hard" then
 		Expand()
 		ExpansionCheck = true
 	else
@@ -36,7 +40,7 @@ RunInitialActivities = function()
 		IdlingUnits()
 		Media.PlaySpeechNotification(player, "ReinforcementsArrived")
 
-		local buildings = Map.ActorsInBox(NWIdlePoint.CenterPosition, Map.BottomRight, function(self) return self.Owner == Greece and self.HasProperty("StartBuildingRepairs") end)
+		local buildings = Utils.Where(Map.ActorsInWorld, function(self) return self.Owner == Greece and self.HasProperty("StartBuildingRepairs") end)
 		Utils.Do(buildings, function(actor)
 			Trigger.OnDamaged(actor, function(building)
 				if building.Owner == Greece and building.Health < building.MaxHealth * 3/4 then
@@ -61,7 +65,7 @@ RunInitialActivities = function()
 	ProduceInfantry()
 	Trigger.AfterDelay(DateTime.Minutes(2), ProduceShips)
 
-	if Map.Difficulty == "Hard" or Map.Difficulty == "Medium" then
+	if Map.LobbyOption("difficulty") == "hard" or Map.LobbyOption("difficulty") == "normal" then
 		Trigger.AfterDelay(DateTime.Seconds(25), ReinfInf)
 	end
 	Trigger.AfterDelay(DateTime.Minutes(2), ReinfInf)
@@ -81,6 +85,7 @@ Expand = function()
 
 	mcvGG.Move(mcvGGLoadPoint.Location)
 	mcvtransport.Move(lstBeachPoint.Location)
+	Media.DisplayMessage("Allied MCV detected moving to the island.")
 
 	Reinforcements.Reinforce(GoodGuy, { "dd", "dd" }, ShipArrivePath, 0, function(ddsquad)
 		ddsquad.AttackMove(NearExpPoint.Location) end)
@@ -139,7 +144,10 @@ end
 Tick = function()
 	if Greece.HasNoRequiredUnits() and GoodGuy.HasNoRequiredUnits() then
 		player.MarkCompletedObjective(KillAll)
-		player.MarkCompletedObjective(HoldObjective)
+
+		if HoldObjective then
+			player.MarkCompletedObjective(HoldObjective)
+		end
 	end
 
 	if player.HasNoRequiredUnits() then
@@ -174,9 +182,9 @@ Tick = function()
 
 	if not RCheck then
 		RCheck = true
-		if Map.Difficulty == "Easy" and ReinfCheck then
+		if Map.LobbyOption("difficulty") == "easy" and ReinfCheck then
 			Trigger.AfterDelay(DateTime.Minutes(6), ReinfArmor)
-		elseif Map.Difficulty == "Medium" then
+		elseif Map.LobbyOption("difficulty") == "normal" then
 			Trigger.AfterDelay(DateTime.Minutes(4), ReinfArmor)
 		else
 			Trigger.AfterDelay(DateTime.Minutes(3), ReinfArmor)
@@ -188,8 +196,6 @@ WorldLoaded = function()
 	player = Player.GetPlayer("USSR")
 	GoodGuy = Player.GetPlayer("GoodGuy")
 	Greece = Player.GetPlayer("Greece")
-
-	RunInitialActivities()
 
 	Trigger.OnObjectiveAdded(player, function(p, id)
 		Media.DisplayMessage(p.GetObjectiveDescription(id), "New " .. string.lower(p.GetObjectiveType(id)) .. " objective")
@@ -206,42 +212,57 @@ WorldLoaded = function()
 	KillAll = player.AddPrimaryObjective("Defeat the Allied forces.")
 	BeatUSSR = GoodGuy.AddPrimaryObjective("Defeat the Soviet forces.")
 
+	RunInitialActivities()
+
 	Trigger.OnDamaged(mcvGG, Expand)
 	Trigger.OnDamaged(mcvtransport, Expand)
 
-	Trigger.OnKilled(Radar, function()
-		player.MarkFailedObjective(CaptureObjective)
+	Trigger.OnKilled(RadarDome, function()
+		if not player.IsObjectiveCompleted(CaptureObjective) then
+			player.MarkFailedObjective(CaptureObjective)
+		end
+
+		if HoldObjective then
+			player.MarkFailedObjective(HoldObjective)
+		end
 	end)
 
-	Trigger.OnCapture(Radar, function(self, captor)
-		if captor.Owner ~= player then
+	RadarDome.GrantCondition("french")
+	Trigger.OnCapture(RadarDome, function()
+		if player.IsObjectiveCompleted(KillAll) then
+			player.MarkCompletedObjective(CaptureObjective)
 			return
 		end
 
 		HoldObjective = player.AddPrimaryObjective("Defend the Radar Dome.")
 		player.MarkCompletedObjective(CaptureObjective)
+		Beacon.New(player, MCVDeploy.CenterPosition)
+		if Map.LobbyOption("difficulty") == "easy" then
+			Actor.Create("camera", true, { Owner = player, Location = MCVDeploy.Location })
+			Media.DisplayMessage("Movement of an Allied expansion base discovered.")
+		else
+			Actor.Create("MCV.CAM", true, { Owner = player, Location = MCVDeploy.Location })
+			Media.DisplayMessage("Coordinates of an Allied expansion base discovered.")
+		end
 
 		if not ExpansionCheck then
 			Expand()
 			ExpansionCheck = true
 		end
 
-		Reinforcements.Reinforce(Greece, ArmorReinfGreece, AlliedCrossroadsToRadarPath , 0, function(soldier)
-			soldier.Hunt()
-		end)
+		Reinforcements.Reinforce(Greece, ArmorReinfGreece, AlliedCrossroadsToRadarPath , 0, IdleHunt)
 
-		Trigger.AfterDelay(1, function()
-			local newRadar = Actor.Create("dome", true, { Owner = player, Location = Radar.Location })
-			newRadar.Health = Radar.Health
-			Radar.Destroy()
-			Trigger.OnKilled(newRadar, function()
+		RadarDome.RevokeCondition(1)
+		Trigger.ClearAll(RadarDome)
+		Trigger.AfterDelay(0, function()
+			Trigger.OnRemovedFromWorld(RadarDome, function()
 				player.MarkFailedObjective(HoldObjective)
 			end)
 		end)
 	end)
 
 	Trigger.OnEnteredProximityTrigger(USSRExpansionPoint.CenterPosition, WDist.New(4 * 1024), function(unit, id)
-		if unit.Owner == player and Radar.Owner == player then
+		if unit.Owner == player and RadarDome.Owner == player then
 			Trigger.RemoveProximityTrigger(id)
 
 			Para2()

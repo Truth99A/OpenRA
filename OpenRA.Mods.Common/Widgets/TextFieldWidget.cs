@@ -1,26 +1,39 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
-using System.Drawing;
+using System.IO;
+using System.Linq;
+using OpenRA.Primitives;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets
 {
+	public enum TextFieldType { General, Filename, Integer }
 	public class TextFieldWidget : Widget
 	{
 		string text = "";
 		public string Text
 		{
-			get { return text; }
-			set { text = value ?? ""; CursorPosition = CursorPosition.Clamp(0, text.Length); }
+			get
+			{
+				return text;
+			}
+
+			set
+			{
+				text = RemoveInvalidCharacters(value ?? "");
+				CursorPosition = CursorPosition.Clamp(0, text.Length);
+				ClearSelection();
+			}
 		}
 
 		public int MaxLength = 0;
@@ -29,6 +42,24 @@ namespace OpenRA.Mods.Common.Widgets
 		public int RightMargin = 5;
 
 		public bool Disabled = false;
+
+		TextFieldType type = TextFieldType.General;
+		public TextFieldType Type
+		{
+			get
+			{
+				return type;
+			}
+
+			set
+			{
+				type = value;
+
+				// Revalidate text
+				text = RemoveInvalidCharacters(text);
+				CursorPosition = CursorPosition.Clamp(0, text.Length);
+			}
+		}
 
 		public Func<bool> OnEnterKey = () => false;
 		public Func<bool> OnTabKey = () => false;
@@ -44,6 +75,11 @@ namespace OpenRA.Mods.Common.Widgets
 		public Color TextColor = ChromeMetrics.Get<Color>("TextfieldColor");
 		public Color TextColorDisabled = ChromeMetrics.Get<Color>("TextfieldColorDisabled");
 		public Color TextColorInvalid = ChromeMetrics.Get<Color>("TextfieldColorInvalid");
+		public Color TextColorHighlight = ChromeMetrics.Get<Color>("TextfieldColorHighlight");
+
+		protected int selectionStartIndex = -1;
+		protected int selectionEndIndex = -1;
+		protected bool mouseSelectionActive = false;
 
 		public TextFieldWidget()
 		{
@@ -55,10 +91,14 @@ namespace OpenRA.Mods.Common.Widgets
 		{
 			Text = widget.Text;
 			MaxLength = widget.MaxLength;
+			LeftMargin = widget.LeftMargin;
+			RightMargin = widget.RightMargin;
+			Type = widget.Type;
 			Font = widget.Font;
 			TextColor = widget.TextColor;
 			TextColorDisabled = widget.TextColorDisabled;
 			TextColorInvalid = widget.TextColorInvalid;
+			TextColorHighlight = widget.TextColorHighlight;
 			VisualHeight = widget.VisualHeight;
 			IsDisabled = widget.IsDisabled;
 		}
@@ -80,15 +120,35 @@ namespace OpenRA.Mods.Common.Widgets
 			if (IsDisabled())
 				return false;
 
-			if (mi.Event != MouseInputEvent.Down)
+			if (mouseSelectionActive)
+			{
+				if (mi.Event == MouseInputEvent.Up)
+				{
+					mouseSelectionActive = false;
+					return true;
+				}
+				else if (mi.Event != MouseInputEvent.Move)
+					return false;
+			}
+			else if (mi.Event != MouseInputEvent.Down)
 				return false;
 
 			// Attempt to take keyboard focus
 			if (!RenderBounds.Contains(mi.Location) || !TakeKeyboardFocus())
 				return false;
 
+			mouseSelectionActive = true;
+
 			ResetBlinkCycle();
+
+			var cachedCursorPos = CursorPosition;
 			CursorPosition = ClosestCursorPosition(mi.Location.X);
+
+			if (mi.Modifiers.HasModifier(Modifiers.Shift) || (mi.Event == MouseInputEvent.Move && mouseSelectionActive))
+				HandleSelectionUpdate(cachedCursorPos, CursorPosition);
+			else
+				ClearSelection();
+
 			return true;
 		}
 
@@ -135,6 +195,28 @@ namespace OpenRA.Mods.Common.Widgets
 			return CursorPosition + trimmedSpaces + nextWhitespace;
 		}
 
+		string RemoveInvalidCharacters(string input)
+		{
+			switch (Type)
+			{
+				case TextFieldType.Filename:
+				{
+					var invalidIndex = -1;
+					var invalidChars = Path.GetInvalidFileNameChars();
+					while ((invalidIndex = input.IndexOfAny(invalidChars)) != -1)
+						input = input.Remove(invalidIndex, 1);
+
+					return input;
+				}
+
+				case TextFieldType.Integer:
+					return new string(input.Where(c => char.IsDigit(c)).ToArray());
+
+				default:
+					return input;
+			}
+		}
+
 		public override bool HandleKeyPress(KeyInput e)
 		{
 			if (IsDisabled() || e.Event == KeyInputEvent.Up)
@@ -146,7 +228,8 @@ namespace OpenRA.Mods.Common.Widgets
 
 			var isOSX = Platform.CurrentPlatform == PlatformType.OSX;
 
-			switch (e.Key) {
+			switch (e.Key)
+			{
 				case Keycode.RETURN:
 				case Keycode.KP_ENTER:
 					if (OnEnterKey())
@@ -159,6 +242,7 @@ namespace OpenRA.Mods.Common.Widgets
 					break;
 
 				case Keycode.ESCAPE:
+					ClearSelection();
 					if (OnEscKey())
 						return true;
 					break;
@@ -172,12 +256,19 @@ namespace OpenRA.Mods.Common.Widgets
 					ResetBlinkCycle();
 					if (CursorPosition > 0)
 					{
+						var cachedCurrentCursorPos = CursorPosition;
+
 						if ((!isOSX && e.Modifiers.HasModifier(Modifiers.Ctrl)) || (isOSX && e.Modifiers.HasModifier(Modifiers.Alt)))
 							CursorPosition = GetPrevWhitespaceIndex();
 						else if (isOSX && e.Modifiers.HasModifier(Modifiers.Meta))
 							CursorPosition = 0;
 						else
 							CursorPosition--;
+
+						if (e.Modifiers.HasModifier(Modifiers.Shift))
+							HandleSelectionUpdate(cachedCurrentCursorPos, CursorPosition);
+						else
+							ClearSelection();
 					}
 
 					break;
@@ -186,30 +277,51 @@ namespace OpenRA.Mods.Common.Widgets
 					ResetBlinkCycle();
 					if (CursorPosition <= Text.Length - 1)
 					{
+						var cachedCurrentCursorPos = CursorPosition;
+
 						if ((!isOSX && e.Modifiers.HasModifier(Modifiers.Ctrl)) || (isOSX && e.Modifiers.HasModifier(Modifiers.Alt)))
 							CursorPosition = GetNextWhitespaceIndex();
 						else if (isOSX && e.Modifiers.HasModifier(Modifiers.Meta))
 							CursorPosition = Text.Length;
 						else
 							CursorPosition++;
+
+						if (e.Modifiers.HasModifier(Modifiers.Shift))
+							HandleSelectionUpdate(cachedCurrentCursorPos, CursorPosition);
+						else
+							ClearSelection();
 					}
 
 					break;
 
 				case Keycode.HOME:
 					ResetBlinkCycle();
+					if (e.Modifiers.HasModifier(Modifiers.Shift))
+						HandleSelectionUpdate(CursorPosition, 0);
+					else
+						ClearSelection();
+
 					CursorPosition = 0;
 					break;
 
 				case Keycode.END:
 					ResetBlinkCycle();
+
+					if (e.Modifiers.HasModifier(Modifiers.Shift))
+						HandleSelectionUpdate(CursorPosition, Text.Length);
+					else
+						ClearSelection();
+
 					CursorPosition = Text.Length;
 					break;
 
 				case Keycode.D:
 					if (e.Modifiers.HasModifier(Modifiers.Ctrl) && CursorPosition < Text.Length)
 					{
-						Text = Text.Remove(CursorPosition, 1);
+						// Write directly to the Text backing field to avoid unnecessary validation
+						text = text.Remove(CursorPosition, 1);
+						CursorPosition = CursorPosition.Clamp(0, text.Length);
+
 						OnTextEdited();
 					}
 
@@ -220,7 +332,10 @@ namespace OpenRA.Mods.Common.Widgets
 					ResetBlinkCycle();
 					if (e.Modifiers.HasModifier(Modifiers.Ctrl) && CursorPosition < Text.Length)
 					{
-						Text = Text.Remove(CursorPosition);
+						// Write directly to the Text backing field to avoid unnecessary validation
+						text = text.Remove(CursorPosition);
+						CursorPosition = CursorPosition.Clamp(0, text.Length);
+
 						OnTextEdited();
 					}
 
@@ -231,8 +346,10 @@ namespace OpenRA.Mods.Common.Widgets
 					ResetBlinkCycle();
 					if (!isOSX && e.Modifiers.HasModifier(Modifiers.Ctrl) && CursorPosition > 0)
 					{
-						Text = Text.Substring(CursorPosition);
+						// Write directly to the Text backing field to avoid unnecessary validation
+						text = text.Substring(CursorPosition);
 						CursorPosition = 0;
+						ClearSelection();
 						OnTextEdited();
 					}
 
@@ -241,12 +358,25 @@ namespace OpenRA.Mods.Common.Widgets
 				case Keycode.X:
 					ResetBlinkCycle();
 					if (((!isOSX && e.Modifiers.HasModifier(Modifiers.Ctrl)) || (isOSX && e.Modifiers.HasModifier(Modifiers.Meta))) &&
-						!string.IsNullOrEmpty(Text))
+						!string.IsNullOrEmpty(Text) && selectionStartIndex != -1)
 					{
-						Game.Renderer.SetClipboardText(Text);
-						Text = Text.Remove(0);
-						CursorPosition = 0;
+						var lowestIndex = selectionStartIndex < selectionEndIndex ? selectionStartIndex : selectionEndIndex;
+						var highestIndex = selectionStartIndex < selectionEndIndex ? selectionEndIndex : selectionStartIndex;
+						Game.Renderer.SetClipboardText(Text.Substring(lowestIndex, highestIndex - lowestIndex));
+
+						RemoveSelectedText();
 						OnTextEdited();
+					}
+
+					break;
+				case Keycode.C:
+					ResetBlinkCycle();
+					if (((!isOSX && e.Modifiers.HasModifier(Modifiers.Ctrl)) || (isOSX && e.Modifiers.HasModifier(Modifiers.Meta)))
+						&& !string.IsNullOrEmpty(Text) && selectionStartIndex != -1)
+					{
+						var lowestIndex = selectionStartIndex < selectionEndIndex ? selectionStartIndex : selectionEndIndex;
+						var highestIndex = selectionStartIndex < selectionEndIndex ? selectionEndIndex : selectionStartIndex;
+						Game.Renderer.SetClipboardText(Text.Substring(lowestIndex, highestIndex - lowestIndex));
 					}
 
 					break;
@@ -254,15 +384,19 @@ namespace OpenRA.Mods.Common.Widgets
 				case Keycode.DELETE:
 					// cmd+delete is equivalent to ctrl+k on non-osx
 					ResetBlinkCycle();
-					if (CursorPosition < Text.Length)
+					if (selectionStartIndex != -1)
+						RemoveSelectedText();
+					else if (CursorPosition < Text.Length)
 					{
+						// Write directly to the Text backing field to avoid unnecessary validation
 						if ((!isOSX && e.Modifiers.HasModifier(Modifiers.Ctrl)) || (isOSX && e.Modifiers.HasModifier(Modifiers.Alt)))
-							Text = Text.Substring(0, CursorPosition) + Text.Substring(GetNextWhitespaceIndex());
+							text = text.Substring(0, CursorPosition) + text.Substring(GetNextWhitespaceIndex());
 						else if (isOSX && e.Modifiers.HasModifier(Modifiers.Meta))
-							Text = Text.Remove(CursorPosition);
+							text = text.Remove(CursorPosition);
 						else
-							Text = Text.Remove(CursorPosition, 1);
+							text = text.Remove(CursorPosition, 1);
 
+						CursorPosition = CursorPosition.Clamp(0, text.Length);
 						OnTextEdited();
 					}
 
@@ -271,23 +405,26 @@ namespace OpenRA.Mods.Common.Widgets
 				case Keycode.BACKSPACE:
 					// cmd+backspace is equivalent to ctrl+u on non-osx
 					ResetBlinkCycle();
-					if (CursorPosition > 0)
+					if (selectionStartIndex != -1)
+						RemoveSelectedText();
+					else if (CursorPosition > 0)
 					{
+						// Write directly to the Text backing field to avoid unnecessary validation
 						if ((!isOSX && e.Modifiers.HasModifier(Modifiers.Ctrl)) || (isOSX && e.Modifiers.HasModifier(Modifiers.Alt)))
 						{
 							var prevWhitespace = GetPrevWhitespaceIndex();
-							Text = Text.Substring(0, prevWhitespace) + Text.Substring(CursorPosition);
+							text = text.Substring(0, prevWhitespace) + text.Substring(CursorPosition);
 							CursorPosition = prevWhitespace;
 						}
 						else if (isOSX && e.Modifiers.HasModifier(Modifiers.Meta))
 						{
-							Text = Text.Substring(CursorPosition);
+							text = text.Substring(CursorPosition);
 							CursorPosition = 0;
 						}
 						else
 						{
 							CursorPosition--;
-							Text = Text.Remove(CursorPosition, 1);
+							text = text.Remove(CursorPosition, 1);
 						}
 
 						OnTextEdited();
@@ -297,6 +434,10 @@ namespace OpenRA.Mods.Common.Widgets
 
 				case Keycode.V:
 					ResetBlinkCycle();
+
+					if (selectionStartIndex != -1)
+						RemoveSelectedText();
+
 					if ((!isOSX && e.Modifiers.HasModifier(Modifiers.Ctrl)) || (isOSX && e.Modifiers.HasModifier(Modifiers.Meta)))
 					{
 						var clipboardText = Game.Renderer.GetClipboardText();
@@ -312,33 +453,85 @@ namespace OpenRA.Mods.Common.Widgets
 					}
 
 					break;
+				case Keycode.A:
+					// Ctrl+A as Select-All, or Cmd+A on OSX
+					if ((!isOSX && e.Modifiers.HasModifier(Modifiers.Ctrl)) || (isOSX && e.Modifiers.HasModifier(Modifiers.Meta)))
+					{
+						ClearSelection();
+						HandleSelectionUpdate(0, Text.Length);
+					}
 
+					break;
 				default:
 					break;
-				}
+			}
 
 			return true;
 		}
 
-		public override bool HandleTextInput(string text)
+		public override bool HandleTextInput(string input)
 		{
 			if (!HasKeyboardFocus || IsDisabled())
 				return false;
 
+			// Validate input
+			input = RemoveInvalidCharacters(input);
+			if (input.Length == 0)
+				return true;
+
+			if (selectionStartIndex != -1)
+				RemoveSelectedText();
+
 			if (MaxLength > 0 && Text.Length >= MaxLength)
 				return true;
 
-			var pasteLength = text.Length;
+			var pasteLength = input.Length;
 
 			// Truncate the pasted string if the total length (current + paste) is greater than the maximum.
 			if (MaxLength > 0 && MaxLength > Text.Length)
-				pasteLength = Math.Min(text.Length, MaxLength - Text.Length);
+				pasteLength = Math.Min(input.Length, MaxLength - Text.Length);
 
-			Text = Text.Insert(CursorPosition, text.Substring(0, pasteLength));
+			// Write directly to the Text backing field to avoid repeating the invalid character validation
+			text = text.Insert(CursorPosition, input.Substring(0, pasteLength));
 			CursorPosition += pasteLength;
+			ClearSelection();
 			OnTextEdited();
 
 			return true;
+		}
+
+		void HandleSelectionUpdate(int prevCursorPos, int newCursorPos)
+		{
+			// If selection index is -1, there's no selection already open so create one
+			if (selectionStartIndex == -1)
+				selectionStartIndex = prevCursorPos;
+
+			selectionEndIndex = newCursorPos;
+
+			if (selectionStartIndex == selectionEndIndex)
+				ClearSelection();
+		}
+
+		void ClearSelection()
+		{
+			selectionStartIndex = -1;
+			selectionEndIndex = -1;
+		}
+
+		void RemoveSelectedText()
+		{
+			if (selectionStartIndex != -1)
+			{
+				var lowestIndex = selectionStartIndex < selectionEndIndex ? selectionStartIndex : selectionEndIndex;
+				var highestIndex = selectionStartIndex < selectionEndIndex ? selectionEndIndex : selectionStartIndex;
+
+				// Write directly to the Text backing field to avoid unnecessary validation
+				text = text.Remove(lowestIndex, highestIndex - lowestIndex);
+
+				ClearSelection();
+
+				CursorPosition = lowestIndex;
+			}
 		}
 
 		protected int blinkCycle = 10;
@@ -375,14 +568,15 @@ namespace OpenRA.Mods.Common.Widgets
 			var disabled = IsDisabled();
 			var state = disabled ? "textfield-disabled" :
 				HasKeyboardFocus ? "textfield-focused" :
-				Ui.MouseOverWidget == this ? "textfield-hover" :
+				Ui.MouseOverWidget == this || Children.Any(c => c == Ui.MouseOverWidget) ? "textfield-hover" :
 				"textfield";
 
 			WidgetUtils.DrawPanel(state,
 				new Rectangle(pos.X, pos.Y, Bounds.Width, Bounds.Height));
 
 			// Inset text by the margin and center vertically
-			var textPos = pos + new int2(LeftMargin, (Bounds.Height - textSize.Y) / 2 - VisualHeight);
+			var verticalMargin = (Bounds.Height - textSize.Y) / 2 - VisualHeight;
+			var textPos = pos + new int2(LeftMargin, verticalMargin);
 
 			// Right align when editing and scissor when the text overflows
 			if (textSize.X > Bounds.Width - LeftMargin - RightMargin)
@@ -392,6 +586,18 @@ namespace OpenRA.Mods.Common.Widgets
 
 				Game.Renderer.EnableScissor(new Rectangle(pos.X + LeftMargin, pos.Y,
 					Bounds.Width - LeftMargin - RightMargin, Bounds.Bottom));
+			}
+
+			// Draw the highlight around the selected area
+			if (selectionStartIndex != -1)
+			{
+				var visualSelectionStartIndex = selectionStartIndex < selectionEndIndex ? selectionStartIndex : selectionEndIndex;
+				var visualSelectionEndIndex = selectionStartIndex < selectionEndIndex ? selectionEndIndex : selectionStartIndex;
+				var highlightStartX = font.Measure(apparentText.Substring(0, visualSelectionStartIndex)).X;
+				var highlightEndX = font.Measure(apparentText.Substring(0, visualSelectionEndIndex)).X;
+
+				WidgetUtils.FillRectWithColor(
+					new Rectangle(textPos.X + highlightStartX, textPos.Y, highlightEndX - highlightStartX, Bounds.Height - (verticalMargin * 2)), TextColorHighlight);
 			}
 
 			var color =

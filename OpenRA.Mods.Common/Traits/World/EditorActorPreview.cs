@@ -1,16 +1,16 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using OpenRA.Graphics;
@@ -22,25 +22,37 @@ namespace OpenRA.Mods.Common.Traits
 {
 	public class EditorActorPreview
 	{
-		public readonly string Tooltip;
-		public readonly string ID;
+		public readonly string DescriptiveName;
 		public readonly ActorInfo Info;
-		public readonly PlayerReference Owner;
 		public readonly WPos CenterPosition;
 		public readonly IReadOnlyDictionary<CPos, SubCell> Footprint;
 		public readonly Rectangle Bounds;
+		public readonly SelectionBoxRenderable SelectionBox;
 
+		public string Tooltip
+		{
+			get
+			{
+				return (tooltip == null ? " < " + Info.Name + " >" : tooltip.Name) + "\n" + Owner.Name + " (" + Owner.Faction + ")"
+					+ "\nID: " + ID + "\nType: " + Info.Name;
+			}
+		}
+
+		public string ID { get; set; }
+		public PlayerReference Owner { get; set; }
 		public SubCell SubCell { get; private set; }
+		public bool Selected { get; set; }
 
 		readonly ActorReference actor;
 		readonly WorldRenderer worldRenderer;
+		readonly TooltipInfoBase tooltip;
 		IActorPreview[] previews;
 
 		public EditorActorPreview(WorldRenderer worldRenderer, string id, ActorReference actor, PlayerReference owner)
 		{
 			ID = id;
 			this.actor = actor;
-			this.Owner = owner;
+			Owner = owner;
 			this.worldRenderer = worldRenderer;
 
 			if (!actor.InitDict.Contains<FactionInit>())
@@ -69,24 +81,26 @@ namespace OpenRA.Mods.Common.Traits
 				Footprint = new ReadOnlyDictionary<CPos, SubCell>(footprint);
 			}
 
-			var tooltip = Info.TraitInfoOrDefault<TooltipInfo>();
-			Tooltip = (tooltip == null ? " < " + Info.Name + " >" : tooltip.Name) + "\n" + owner.Name + " (" + owner.Faction + ")"
-				+ "\nID: " + ID + "\nType: " + Info.Name;
+			tooltip = Info.TraitInfos<EditorOnlyTooltipInfo>().FirstOrDefault(info => info.EnabledByDefault) as TooltipInfoBase
+				?? Info.TraitInfos<TooltipInfo>().FirstOrDefault(info => info.EnabledByDefault);
+
+			DescriptiveName = tooltip != null ? tooltip.Name : Info.Name;
 
 			GeneratePreviews();
 
 			// Bounds are fixed from the initial render.
 			// If this is a problem, then we may need to fetch the area from somewhere else
-			var r = previews
-				.SelectMany(p => p.Render(worldRenderer, CenterPosition))
-				.Select(rr => rr.PrepareRender(worldRenderer));
+			var r = previews.SelectMany(p => p.ScreenBounds(worldRenderer, CenterPosition));
 
 			if (r.Any())
 			{
-				Bounds = r.First().ScreenBounds(worldRenderer);
+				Bounds = r.First();
 				foreach (var rr in r.Skip(1))
-					Bounds = Rectangle.Union(Bounds, rr.ScreenBounds(worldRenderer));
+					Bounds = Rectangle.Union(Bounds, rr);
 			}
+
+			SelectionBox = new SelectionBoxRenderable(new WPos(CenterPosition.X, CenterPosition.Y, 8192),
+				new Rectangle(Bounds.X, Bounds.Y, Bounds.Width, Bounds.Height), Color.White);
 		}
 
 		public void Tick()
@@ -97,7 +111,16 @@ namespace OpenRA.Mods.Common.Traits
 
 		public IEnumerable<IRenderable> Render()
 		{
-			return previews.SelectMany(p => p.Render(worldRenderer, CenterPosition));
+			var items = previews.SelectMany(p => p.Render(worldRenderer, CenterPosition));
+			if (Selected)
+			{
+				var highlight = worldRenderer.Palette("highlight");
+				var overlay = items.Where(r => !r.IsDecoration)
+					.Select(r => r.WithPalette(highlight));
+				return items.Concat(overlay).Append(SelectionBox);
+			}
+
+			return items;
 		}
 
 		public void ReplaceInit<T>(T init)
@@ -107,6 +130,14 @@ namespace OpenRA.Mods.Common.Traits
 				actor.InitDict.Remove(original);
 
 			actor.InitDict.Add(init);
+			GeneratePreviews();
+		}
+
+		public void RemoveInit<T>()
+		{
+			var original = actor.InitDict.GetOrDefault<T>();
+			if (original != null)
+				actor.InitDict.Remove(original);
 			GeneratePreviews();
 		}
 
@@ -146,7 +177,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				var buildingInfo = Info.TraitInfoOrDefault<BuildingInfo>();
 				if (buildingInfo != null)
-					offset = FootprintUtils.CenterOffset(world, buildingInfo);
+					offset = buildingInfo.CenterOffset(world);
 
 				return world.Map.CenterOfSubCell(cell, subCell) + offset;
 			}
@@ -165,6 +196,11 @@ namespace OpenRA.Mods.Common.Traits
 		public ActorReference Export()
 		{
 			return new ActorReference(actor.Type, actor.Save().ToDictionary());
+		}
+
+		public override string ToString()
+		{
+			return "{0} {1}".F(Info.Name, ID);
 		}
 	}
 }

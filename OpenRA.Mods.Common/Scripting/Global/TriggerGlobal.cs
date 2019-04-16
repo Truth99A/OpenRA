@@ -1,15 +1,15 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using Eluant;
 using OpenRA.Effects;
@@ -34,8 +34,7 @@ namespace OpenRA.Mods.Common.Scripting
 		[Desc("Call a function after a specified delay. The callback function will be called as func().")]
 		public void AfterDelay(int delay, LuaFunction func)
 		{
-			var f = func.CopyReference() as LuaFunction;
-
+			var f = (LuaFunction)func.CopyReference();
 			Action doCall = () =>
 			{
 				try
@@ -50,6 +49,20 @@ namespace OpenRA.Mods.Common.Scripting
 			};
 
 			Context.World.AddFrameEndTask(w => w.Add(new DelayedAction(delay, doCall)));
+		}
+
+		[Desc("Call a function for each passenger when it enters a transport. " +
+			"The callback function will be called as func(Actor transport, Actor passenger).")]
+		public void OnPassengerEntered(Actor a, LuaFunction func)
+		{
+			GetScriptTriggers(a).RegisterCallback(Trigger.OnPassengerEntered, func, Context);
+		}
+
+		[Desc("Call a function for each passenger when it exits a transport. " +
+			"The callback function will be called as func(Actor transport, Actor passenger).")]
+		public void OnPassengerExited(Actor a, LuaFunction func)
+		{
+			GetScriptTriggers(a).RegisterCallback(Trigger.OnPassengerExited, func, Context);
 		}
 
 		[Desc("Call a function each tick that the actor is idle. " +
@@ -78,17 +91,15 @@ namespace OpenRA.Mods.Common.Scripting
 		public void OnAllKilled(Actor[] actors, LuaFunction func)
 		{
 			var group = actors.ToList();
-			var copy = (LuaFunction)func.CopyReference();
+			var f = (LuaFunction)func.CopyReference();
 			Action<Actor> onMemberKilled = m =>
 			{
 				try
 				{
 					group.Remove(m);
 					if (!group.Any())
-					{
-						copy.Call();
-						copy.Dispose();
-					}
+						using (f)
+							f.Call();
 				}
 				catch (Exception e)
 				{
@@ -105,7 +116,7 @@ namespace OpenRA.Mods.Common.Scripting
 		public void OnAnyKilled(Actor[] actors, LuaFunction func)
 		{
 			var called = false;
-			var copy = (LuaFunction)func.CopyReference();
+			var f = (LuaFunction)func.CopyReference();
 			Action<Actor> onMemberKilled = m =>
 			{
 				try
@@ -113,10 +124,10 @@ namespace OpenRA.Mods.Common.Scripting
 					if (called)
 						return;
 
+					using (f)
 					using (var killed = m.ToLuaValue(Context))
-						copy.Call(killed).Dispose();
+						f.Call(killed).Dispose();
 
-					copy.Dispose();
 					called = true;
 				}
 				catch (Exception e)
@@ -134,6 +145,13 @@ namespace OpenRA.Mods.Common.Scripting
 		public void OnProduction(Actor a, LuaFunction func)
 		{
 			GetScriptTriggers(a).RegisterCallback(Trigger.OnProduction, func, Context);
+		}
+
+		[Desc("Call a function when any actor produces another actor. The callback " +
+			"function will be called as func(Actor producer, Actor produced, string productionType).")]
+		public void OnAnyProduction(LuaFunction func)
+		{
+			GetScriptTriggers(Context.World.WorldActor).RegisterCallback(Trigger.OnOtherProduction, func, Context);
 		}
 
 		[Desc("Call a function when this player completes all primary objectives. " +
@@ -191,7 +209,7 @@ namespace OpenRA.Mods.Common.Scripting
 		{
 			var group = actors.ToList();
 
-			var copy = (LuaFunction)func.CopyReference();
+			var f = (LuaFunction)func.CopyReference();
 			Action<Actor> onMemberRemoved = m =>
 			{
 				try
@@ -201,8 +219,10 @@ namespace OpenRA.Mods.Common.Scripting
 
 					if (!group.Any())
 					{
-						copy.Call().Dispose();
-						copy.Dispose();
+						// Functions can only be .Call()ed once, so operate on a copy so we can reuse it later
+						var temp = (LuaFunction)f.CopyReference();
+						using (temp)
+							temp.Call().Dispose();
 					}
 				}
 				catch (Exception e)
@@ -211,8 +231,26 @@ namespace OpenRA.Mods.Common.Scripting
 				}
 			};
 
+			Action<Actor> onMemberAdded = m =>
+			{
+				try
+				{
+					if (!actors.Contains(m) || group.Contains(m))
+						return;
+
+					group.Add(m);
+				}
+				catch (Exception e)
+				{
+					Context.FatalError(e.Message);
+				}
+			};
+
 			foreach (var a in group)
+			{
 				GetScriptTriggers(a).OnRemovedInternal += onMemberRemoved;
+				GetScriptTriggers(a).OnAddedInternal += onMemberAdded;
+			}
 		}
 
 		[Desc("Call a function when this actor is captured. The callback function " +
@@ -228,7 +266,7 @@ namespace OpenRA.Mods.Common.Scripting
 		{
 			var called = false;
 
-			var copy = (LuaFunction)func.CopyReference();
+			var f = (LuaFunction)func.CopyReference();
 			Action<Actor> onKilledOrCaptured = m =>
 			{
 				try
@@ -236,8 +274,9 @@ namespace OpenRA.Mods.Common.Scripting
 					if (called)
 						return;
 
-					copy.Call().Dispose();
-					copy.Dispose();
+					using (f)
+						f.Call().Dispose();
+
 					called = true;
 				}
 				catch (Exception e)
@@ -256,7 +295,7 @@ namespace OpenRA.Mods.Common.Scripting
 		{
 			var group = actors.ToList();
 
-			var copy = (LuaFunction)func.CopyReference();
+			var f = (LuaFunction)func.CopyReference();
 			Action<Actor> onMemberKilledOrCaptured = m =>
 			{
 				try
@@ -265,10 +304,8 @@ namespace OpenRA.Mods.Common.Scripting
 						return;
 
 					if (!group.Any())
-					{
-						copy.Call().Dispose();
-						copy.Dispose();
-					}
+						using (f)
+							f.Call().Dispose();
 				}
 				catch (Exception e)
 				{
@@ -288,8 +325,9 @@ namespace OpenRA.Mods.Common.Scripting
 			"The callback function will be called as func(Actor a, int id).")]
 		public int OnEnteredFootprint(CPos[] cells, LuaFunction func)
 		{
-			var triggerId = 0;
+			// We can't easily dispose onEntry, so we'll have to rely on finalization for it.
 			var onEntry = (LuaFunction)func.CopyReference();
+			var triggerId = 0;
 			Action<Actor> invokeEntry = a =>
 			{
 				try
@@ -314,8 +352,9 @@ namespace OpenRA.Mods.Common.Scripting
 			"The callback function will be called as func(Actor a, int id).")]
 		public int OnExitedFootprint(CPos[] cells, LuaFunction func)
 		{
-			var triggerId = 0;
+			// We can't easily dispose onExit, so we'll have to rely on finalization for it.
 			var onExit = (LuaFunction)func.CopyReference();
+			var triggerId = 0;
 			Action<Actor> invokeExit = a =>
 			{
 				try
@@ -346,8 +385,9 @@ namespace OpenRA.Mods.Common.Scripting
 			"The callback function will be called as func(Actor a, int id).")]
 		public int OnEnteredProximityTrigger(WPos pos, WDist range, LuaFunction func)
 		{
-			var triggerId = 0;
+			// We can't easily dispose onEntry, so we'll have to rely on finalization for it.
 			var onEntry = (LuaFunction)func.CopyReference();
+			var triggerId = 0;
 			Action<Actor> invokeEntry = a =>
 			{
 				try
@@ -362,7 +402,7 @@ namespace OpenRA.Mods.Common.Scripting
 				}
 			};
 
-			triggerId = Context.World.ActorMap.AddProximityTrigger(pos, range, invokeEntry, null);
+			triggerId = Context.World.ActorMap.AddProximityTrigger(pos, range, WDist.Zero, invokeEntry, null);
 
 			return triggerId;
 		}
@@ -372,8 +412,9 @@ namespace OpenRA.Mods.Common.Scripting
 			"The callback function will be called as func(Actor a, int id).")]
 		public int OnExitedProximityTrigger(WPos pos, WDist range, LuaFunction func)
 		{
-			var triggerId = 0;
+			// We can't easily dispose onExit, so we'll have to rely on finalization for it.
 			var onExit = (LuaFunction)func.CopyReference();
+			var triggerId = 0;
 			Action<Actor> invokeExit = a =>
 			{
 				try
@@ -388,7 +429,7 @@ namespace OpenRA.Mods.Common.Scripting
 				}
 			};
 
-			triggerId = Context.World.ActorMap.AddProximityTrigger(pos, range, null, invokeExit);
+			triggerId = Context.World.ActorMap.AddProximityTrigger(pos, range, WDist.Zero, null, invokeExit);
 
 			return triggerId;
 		}
@@ -407,17 +448,26 @@ namespace OpenRA.Mods.Common.Scripting
 		}
 
 		[Desc("Call a function when this actor is discovered by an enemy or a player with a Neutral stance. " +
-			"The callback function will be called as func(Actor discovered, Player discoverer).")]
+			"The callback function will be called as func(Actor discovered, Player discoverer). " +
+			"The player actor needs the 'EnemyWatcher' trait. The actors to discover need the 'AnnounceOnSeen' trait.")]
 		public void OnDiscovered(Actor a, LuaFunction func)
 		{
 			GetScriptTriggers(a).RegisterCallback(Trigger.OnDiscovered, func, Context);
 		}
 
 		[Desc("Call a function when this player is discovered by an enemy or neutral player. " +
-			"The callback function will be called as func(Player discovered, Player discoverer, Actor discoveredActor).")]
+			"The callback function will be called as func(Player discovered, Player discoverer, Actor discoveredActor)." +
+			"The player actor needs the 'EnemyWatcher' trait. The actors to discover need the 'AnnounceOnSeen' trait.")]
 		public void OnPlayerDiscovered(Player discovered, LuaFunction func)
 		{
 			GetScriptTriggers(discovered.PlayerActor).RegisterCallback(Trigger.OnPlayerDiscovered, func, Context);
+		}
+
+		[Desc("Call a function when this actor is sold. The callback function " +
+			"will be called as func(Actor self).")]
+		public void OnSold(Actor a, LuaFunction func)
+		{
+			GetScriptTriggers(a).RegisterCallback(Trigger.OnSold, func, Context);
 		}
 
 		[Desc("Removes all triggers from this actor. " +

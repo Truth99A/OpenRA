@@ -1,4 +1,7 @@
 mpspawn:
+	Interactable:
+	EditorOnlyTooltip:
+		Name: (multiplayer player starting point)
 	AlwaysVisible:
 	Immobile:
 		OccupiesSpace: false
@@ -6,8 +9,15 @@ mpspawn:
 	WithSpriteBody:
 	BodyOrientation:
 		QuantizedFacings: 1
+	MapEditorData:
+		Categories: System
+	RequiresSpecificOwners:
+		ValidOwnerNames: Neutral
 
 waypoint:
+	Interactable:
+	EditorOnlyTooltip:
+		Name: (waypoint for scripted behavior)
 	AlwaysVisible:
 	Immobile:
 		OccupiesSpace: false
@@ -15,15 +25,19 @@ waypoint:
 	WithSpriteBody:
 	BodyOrientation:
 		QuantizedFacings: 1
+	MapEditorData:
+		Categories: System
 
-^mmch.colorpicker:
+mmch.colorpicker:
 	Inherits: MMCH
 	Mobile:
 		InitialFacing: 160
 	Turreted:
 		InitialFacing: 160
-	WithInfantryBody:
-		StandSequences: run
+	WithFacingSpriteBody:
+		Sequence: walk
+	-Buildable:
+	-MapEditorData:
 	RenderVoxels:
 		Image: mmch
 		Palette: colorpicker
@@ -32,6 +46,9 @@ waypoint:
 		Palette: colorpicker
 
 CAMERA:
+	Interactable:
+	EditorOnlyTooltip:
+		Name: (reveals area to owner)
 	AlwaysVisible:
 	RenderSpritesEditorOnly:
 	WithSpriteBody:
@@ -39,56 +56,58 @@ CAMERA:
 		QuantizedFacings: 1
 	Immobile:
 		OccupiesSpace: false
-	Health:
-		HP: 1000
 	RevealsShroud:
 		Range: 10c0
 		Type: CenterPosition
 	DetectCloaked:
 		Range: 10c0
+	MapEditorData:
+		Categories: System
 
 CRATE:
 	Inherits: ^Crate
 	GiveCashCrateAction:
 		Amount: 1000
 		SelectionShares: 50
-		Effect: dollar
+		Sequence: dollar
 		UseCashTick: true
 	LevelUpCrateAction:
 		SelectionShares: 40
-		Effect: levelup
+		Sequence: levelup
 	HideMapCrateAction:
 		SelectionShares: 5
-		Effect: hide-map
+		Sequence: hide-map
 	HealUnitsCrateAction:
 		SelectionShares: 2
-		Effect: heal
+		Sequence: heal
 	RevealMapCrateAction:
 		SelectionShares: 1
-		Effect: reveal-map
+		Sequence: reveal-map
 	GiveMcvCrateAction:
 		SelectionShares: 0
 		NoBaseSelectionShares: 100
 		Units: mcv
-	GrantUpgradeCrateAction@cloak:
+	GrantExternalConditionCrateAction@cloak:
 		SelectionShares: 5
-		Effect: stealth
-		Upgrades: cloakgenerator
-		Notification: cloak5.aud
-	GrantUpgradeCrateAction@firepower:
+		Sequence: stealth
+		Condition: crate-cloak
+		Sound: cloak5.aud
+	GrantExternalConditionCrateAction@firepower:
 		SelectionShares: 5
-		Effect: firepower
-		Upgrades: firepower
-		Notification: 00-i070.aud
-	GrantUpgradeCrateAction@armor:
+		Sequence: firepower
+		Condition: crate-firepower
+		Notification: UnitFirepowerUpgraded
+	GrantExternalConditionCrateAction@armor:
 		SelectionShares: 5
-		Effect: armor
-		Upgrades: damage
-		Notification: 00-i068.aud
-	GrantUpgradeCrateAction@speed:
+		Sequence: armor
+		Condition: crate-damage
+		Notification: UnitArmourUpgraded
+	GrantExternalConditionCrateAction@speed:
 		SelectionShares: 5
-		Upgrades: speed
-		Notification: 00-i080.aud
+		Condition: crate-speed
+		Notification: UnitSpeedUpgraded
+	MapEditorData:
+		Categories: System
 
 SROCK01:
 	Inherits: ^Rock
@@ -136,6 +155,9 @@ CRAT0A:
 	Inherits: ^Box
 
 CRAT0B:
+	Inherits: ^Box
+
+CRAT0C:
 	Inherits: ^Box
 
 DRUM01:
@@ -206,13 +228,24 @@ TRACKS16:
 
 TUNTOP01:
 	Inherits: ^Tunnel
+	TunnelEntrance:
+		RallyPoint: -3, 1
+		Sensor: 0, 1
 
 TUNTOP02:
 	Inherits: ^Tunnel
+	TunnelEntrance:
+		RallyPoint: 1, -3
+		Sensor: 1, 0
 
 TUNTOP03:
 	Inherits: ^Tunnel
+	TunnelEntrance:
+		RallyPoint: 3, 1
+		Sensor: 0, 1
 
 TUNTOP04:
 	Inherits: ^Tunnel
-
+	TunnelEntrance:
+		RallyPoint: 1, 3
+		Sensor: 1, 0

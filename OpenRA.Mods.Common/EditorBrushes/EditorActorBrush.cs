@@ -1,26 +1,19 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System;
-using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
-using OpenRA.FileFormats;
 using OpenRA.Graphics;
-using OpenRA.Mods.Common;
-using OpenRA.Mods.Common.Graphics;
 using OpenRA.Mods.Common.Traits;
-using OpenRA.Orders;
 using OpenRA.Primitives;
 using OpenRA.Traits;
-using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets
 {
@@ -33,8 +26,7 @@ namespace OpenRA.Mods.Common.Widgets
 		readonly EditorActorLayer editorLayer;
 		readonly EditorViewportControllerWidget editorWidget;
 		readonly ActorPreviewWidget preview;
-		readonly CVec locationOffset;
-		readonly WVec previewOffset;
+		readonly WVec centerOffset;
 		readonly PlayerReference owner;
 		readonly CVec[] footprint;
 
@@ -49,6 +41,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 			Actor = actor;
 			this.owner = owner;
+			var ownerName = owner.Name;
 
 			preview = editorWidget.Get<ActorPreviewWidget>("DRAG_ACTOR_PREVIEW");
 			preview.GetScale = () => worldRenderer.Viewport.Zoom;
@@ -56,15 +49,17 @@ namespace OpenRA.Mods.Common.Widgets
 
 			var buildingInfo = actor.TraitInfoOrDefault<BuildingInfo>();
 			if (buildingInfo != null)
-			{
-				locationOffset = -FootprintUtils.AdjustForBuildingSize(buildingInfo);
-				previewOffset = FootprintUtils.CenterOffset(world, buildingInfo);
-			}
+				centerOffset = buildingInfo.CenterOffset(world);
+
+			// Enforce first entry of ValidOwnerNames as owner if the actor has RequiresSpecificOwners
+			var specificOwnerInfo = actor.TraitInfoOrDefault<RequiresSpecificOwnersInfo>();
+			if (specificOwnerInfo != null && !specificOwnerInfo.ValidOwnerNames.Contains(ownerName))
+				ownerName = specificOwnerInfo.ValidOwnerNames.First();
 
 			var td = new TypeDictionary();
 			td.Add(new FacingInit(facing));
 			td.Add(new TurretFacingInit(facing));
-			td.Add(new OwnerInit(owner.Name));
+			td.Add(new OwnerInit(ownerName));
 			td.Add(new FactionInit(owner.Faction));
 			preview.SetPreview(actor, td);
 
@@ -98,17 +93,22 @@ namespace OpenRA.Mods.Common.Widgets
 				return false;
 			}
 
-			var cell = worldRenderer.Viewport.ViewToWorld(mi.Location);
+			var cell = worldRenderer.Viewport.ViewToWorld(mi.Location - worldRenderer.ScreenPxOffset(centerOffset));
 			if (mi.Button == MouseButton.Left && mi.Event == MouseInputEvent.Down)
 			{
 				// Check the actor is inside the map
-				if (!footprint.All(c => world.Map.MapTiles.Value.Contains(cell + locationOffset + c)))
+				if (!footprint.All(c => world.Map.Tiles.Contains(cell + c)))
 					return true;
 
-				var newActorReference = new ActorReference(Actor.Name);
-				newActorReference.Add(new OwnerInit(owner.Name));
+				// Enforce first entry of ValidOwnerNames as owner if the actor has RequiresSpecificOwners
+				var ownerName = owner.Name;
+				var specificOwnerInfo = Actor.TraitInfoOrDefault<RequiresSpecificOwnersInfo>();
+				if (specificOwnerInfo != null && !specificOwnerInfo.ValidOwnerNames.Contains(ownerName))
+					ownerName = specificOwnerInfo.ValidOwnerNames.First();
 
-				cell += locationOffset;
+				var newActorReference = new ActorReference(Actor.Name);
+				newActorReference.Add(new OwnerInit(ownerName));
+
 				newActorReference.Add(new LocationInit(cell));
 
 				var ios = Actor.TraitInfoOrDefault<IOccupySpaceInfo>();
@@ -135,8 +135,8 @@ namespace OpenRA.Mods.Common.Widgets
 
 		public void Tick()
 		{
-			var cell = worldRenderer.Viewport.ViewToWorld(Viewport.LastMousePos);
-			var pos = world.Map.CenterOfCell(cell + locationOffset) + previewOffset;
+			var cell = worldRenderer.Viewport.ViewToWorld(Viewport.LastMousePos - worldRenderer.ScreenPxOffset(centerOffset));
+			var pos = world.Map.CenterOfCell(cell) + centerOffset;
 
 			var origin = worldRenderer.Viewport.WorldToViewPx(worldRenderer.ScreenPxPosition(pos));
 

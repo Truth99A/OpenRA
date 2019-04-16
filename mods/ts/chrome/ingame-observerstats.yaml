@@ -1,8 +1,14 @@
 Background@INGAME_OBSERVERSTATS_BG:
 	Logic: ObserverStatsLogic
+		StatisticsBasicKey: StatisticsBasic
+		StatisticsEconomyKey: StatisticsEconomy
+		StatisticsProductionKey: StatisticsProduction
+		StatisticsCombatKey: StatisticsCombat
+		StatisticsGraphKey: StatisticsGraph
+		StatisticsArmyGraphKey: StatisticsArmyGraph
 	X: 25
 	Y: 50
-	Width: 950
+	Width: 1025
 	Height: 500
 	Background: dialog
 	Children:
@@ -19,11 +25,13 @@ Background@INGAME_OBSERVERSTATS_BG:
 					Align: Center
 					Text: Statistics
 				DropDownButton@STATS_DROPDOWN:
-					X: PARENT_RIGHT-200
+					X: PARENT_RIGHT - 200
 					Y: 15
 					Width: 185
 					Height: 25
 					Font: Bold
+					Children:
+						LogicKeyListener@STATS_DROPDOWN_KEYHANDLER:
 				Container@BASIC_STATS_HEADERS:
 					X: 0
 					Y: 0
@@ -54,38 +62,54 @@ Background@INGAME_OBSERVERSTATS_BG:
 						Label@POWER_HEADER:
 							X: 425
 							Y: 40
-							Width: 80
+							Width: 60
 							Height: 25
 							Font: Bold
 							Text: Power
 						Label@KILLS_HEADER:
-							X: 505
+							X: 485
 							Y: 40
-							Width: 40
+							Width: 60
 							Height: 25
 							Font: Bold
 							Text: Kills
 							Align: Right
 						Label@DEATHS_HEADER:
-							X: 565
+							X: 545
 							Y: 40
-							Width: 40
+							Width: 60
 							Height: 25
 							Font: Bold
 							Text: Deaths
 							Align: Right
-						Label@KD_RATIO_HEADER:
-							X: 625
+						Label@ASSETS_DESTROYED_HEADER:
+							X: 605
 							Y: 40
 							Width: 80
 							Height: 25
 							Font: Bold
-							Text: Kills/Deaths
+							Text: Destroyed
+							Align: Right
+						Label@ASSETS_LOST_HEADER:
+							X: 685
+							Y: 40
+							Width: 80
+							Height: 25
+							Font: Bold
+							Text: Lost
+							Align: Right
+						Label@EXPERIENCE_HEADER:
+							X: 765
+							Y: 40
+							Width: 95
+							Height: 25
+							Font: Bold
+							Text: Score
 							Align: Right
 						Label@ACTIONS_MIN_HEADER:
-							X: 755
+							X: 860
 							Y: 40
-							Width: 40
+							Width: 90
 							Height: 25
 							Font: Bold
 							Text: Actions/min
@@ -193,20 +217,20 @@ Background@INGAME_OBSERVERSTATS_BG:
 							Height: 25
 							Font: Bold
 							Text: Player
-						Label@KILLS_COST_HEADER:
-							X: 245
+						Label@ASSETS_DESTROYED_HEADER:
+							X: 230
 							Y: 40
 							Width: 60
 							Height: 25
 							Font: Bold
-							Text: Kills
-						Label@DEATHS_COST_HEADER:
+							Text: Destroyed
+						Label@ASSETS_LOST_HEADER:
 							X: 325
 							Y: 40
 							Width: 60
 							Height: 25
 							Font: Bold
-							Text: Deaths
+							Text: Lost
 						Label@UNITS_KILLED_HEADER:
 							X: 425
 							Y: 40
@@ -239,6 +263,14 @@ Background@INGAME_OBSERVERSTATS_BG:
 							Font: Bold
 							Text: Bldg Lost
 							Align: Right
+						Label@ARMY_VALUE_HEADER:
+							X: 845
+							Y: 40
+							Width: 40
+							Height: 25
+							Font: Bold
+							Text: Army Value
+							Align: Right
 				Container@EARNED_THIS_MIN_GRAPH_HEADERS:
 					X: 0
 					Y: 0
@@ -253,18 +285,32 @@ Background@INGAME_OBSERVERSTATS_BG:
 							Font: Bold
 							Text: Earnings received each minute
 							Align: Center
+				Container@ARMY_THIS_MIN_GRAPH_HEADERS:
+					X: 0
+					Y: 0
+					Width: PARENT_RIGHT
+					Height: PARENT_BOTTOM
+					Children:
+						Label@EARNED_THIS_MIN_HEADER:
+							X: 0
+							Y: 40
+							Width: PARENT_RIGHT
+							Height: 25
+							Font: Bold
+							Text: Army value over time
+							Align: Center
 				ScrollPanel@PLAYER_STATS_PANEL:
 					X: 25
 					Y: 70
-					Width: PARENT_RIGHT-50
-					Height: PARENT_BOTTOM-45-50
+					Width: PARENT_RIGHT - 50
+					Height: PARENT_BOTTOM - 45 - 50
 					TopBottomSpacing: 5
 					ItemSpacing: 5
 					Children:
 						ScrollItem@TEAM_TEMPLATE:
 							X: 0
 							Y: 0
-							Width: PARENT_RIGHT-35
+							Width: PARENT_RIGHT - 35
 							Height: 25
 							Children:
 								Label@TEAM:
@@ -276,14 +322,14 @@ Background@INGAME_OBSERVERSTATS_BG:
 						ScrollItem@BASIC_PLAYER_TEMPLATE:
 							X: 0
 							Y: 0
-							Width: PARENT_RIGHT-35
+							Width: PARENT_RIGHT - 35
 							Height: 25
 							Children:
 								Image@FLAG:
 									X: 20
 									Y: 5
 									Width: 35
-									Height: PARENT_BOTTOM-5
+									Height: PARENT_BOTTOM - 5
 									ImageName: random
 									ImageCollection: flags
 								Label@PLAYER:
@@ -292,56 +338,78 @@ Background@INGAME_OBSERVERSTATS_BG:
 									Width: 160
 									Height: PARENT_BOTTOM
 									Font: Bold
+									Shadow: True
 								Label@CASH:
 									X: 215
 									Y: 0
 									Width: 80
 									Height: PARENT_BOTTOM
+									Shadow: True
 								Label@EARNED_MIN:
 									X: 295
 									Y: 0
 									Width: 60
 									Height: PARENT_BOTTOM
+									Shadow: True
 								Label@POWER:
 									X: 395
 									Y: 0
 									Width: 80
 									Height: PARENT_BOTTOM
+									Shadow: True
 								Label@KILLS:
-									X: 475
+									X: 455
 									Y: 0
-									Width: 40
+									Width: 60
 									Height: PARENT_BOTTOM
 									Align: Right
+									Shadow: True
 								Label@DEATHS:
-									X: 535
+									X: 515
 									Y: 0
-									Width: 40
+									Width: 60
 									Height: PARENT_BOTTOM
 									Align: Right
-								Label@KD_RATIO:
-									X: 595
+									Shadow: True
+								Label@ASSETS_DESTROYED:
+									X: 575
 									Y: 0
 									Width: 80
 									Height: PARENT_BOTTOM
 									Align: Right
-								Label@ACTIONS_MIN:
-									X: 725
+									Shadow: True
+								Label@ASSETS_LOST:
+									X: 655
 									Y: 0
-									Width: 40
+									Width: 80
 									Height: PARENT_BOTTOM
 									Align: Right
+									Shadow: True
+								Label@EXPERIENCE:
+									X: 735
+									Y: 0
+									Width: 95
+									Height: PARENT_BOTTOM
+									Align: Right
+									Shadow: True
+								Label@ACTIONS_MIN:
+									X: 830
+									Y: 0
+									Width: 90
+									Height: PARENT_BOTTOM
+									Align: Right
+									Shadow: True
 						ScrollItem@ECONOMY_PLAYER_TEMPLATE:
 							X: 0
 							Y: 0
-							Width: PARENT_RIGHT-35
+							Width: PARENT_RIGHT - 35
 							Height: 25
 							Children:
 								Image@FLAG:
 									X: 20
 									Y: 5
 									Width: 35
-									Height: PARENT_BOTTOM-5
+									Height: PARENT_BOTTOM - 5
 									ImageName: random
 									ImageCollection: flags
 								Label@PLAYER:
@@ -350,53 +418,61 @@ Background@INGAME_OBSERVERSTATS_BG:
 									Width: 160
 									Height: PARENT_BOTTOM
 									Font: Bold
+									Shadow: True
 								Label@CASH:
 									X: 215
 									Y: 0
 									Width: 80
 									Height: PARENT_BOTTOM
+									Shadow: True
 								Label@EARNED_MIN:
 									X: 295
 									Y: 0
 									Width: 60
 									Height: PARENT_BOTTOM
+									Shadow: True
 								Label@EARNED_THIS_MIN:
 									X: 395
 									Y: 0
 									Width: 60
 									Height: PARENT_BOTTOM
+									Shadow: True
 								Label@ASSETS:
 									X: 535
 									Y: 0
 									Width: 60
 									Height: PARENT_BOTTOM
+									Shadow: True
 								Label@EARNED:
 									X: 615
 									Y: 0
 									Width: 60
 									Height: PARENT_BOTTOM
+									Shadow: True
 								Label@SPENT:
 									X: 695
 									Y: 0
 									Width: 60
 									Height: PARENT_BOTTOM
+									Shadow: True
 								Label@HARVESTERS:
 									X: 775
 									Y: 0
 									Width: 60
 									Height: PARENT_BOTTOM
 									Align: Right
+									Shadow: True
 						ScrollItem@PRODUCTION_PLAYER_TEMPLATE:
 							X: 0
 							Y: 0
-							Width: PARENT_RIGHT-35
+							Width: PARENT_RIGHT - 35
 							Height: 25
 							Children:
 								Image@FLAG:
 									X: 20
 									Y: 5
 									Width: 35
-									Height: PARENT_BOTTOM-5
+									Height: PARENT_BOTTOM - 5
 									ImageName: random
 									ImageCollection: flags
 								Label@PLAYER:
@@ -405,12 +481,14 @@ Background@INGAME_OBSERVERSTATS_BG:
 									Width: 160
 									Height: PARENT_BOTTOM
 									Font: Bold
+									Shadow: True
 								ObserverProductionIcons@PRODUCTION_ICONS:
 									X: 215
 									Y: 0
 									Width: 320
 									Height: PARENT_BOTTOM
 									ClockPalette: iconclock
+									TooltipContainer: TOOLTIP_CONTAINER
 								ObserverSupportPowerIcons@SUPPORT_POWER_ICONS:
 									X: 535
 									Y: 0
@@ -420,14 +498,14 @@ Background@INGAME_OBSERVERSTATS_BG:
 						ScrollItem@COMBAT_PLAYER_TEMPLATE:
 							X: 0
 							Y: 0
-							Width: PARENT_RIGHT-35
+							Width: PARENT_RIGHT - 35
 							Height: 25
 							Children:
 								Image@FLAG:
 									X: 20
 									Y: 5
 									Width: 35
-									Height: PARENT_BOTTOM-5
+									Height: PARENT_BOTTOM - 5
 									ImageName: random
 									ImageCollection: flags
 								Label@PLAYER:
@@ -436,47 +514,81 @@ Background@INGAME_OBSERVERSTATS_BG:
 									Width: 160
 									Height: PARENT_BOTTOM
 									Font: Bold
-								Label@KILLS_COST:
+									Shadow: True
+								Label@ASSETS_DESTROYED:
 									X: 215
 									Y: 0
 									Width: 60
 									Height: PARENT_BOTTOM
-								Label@DEATHS_COST:
+									Shadow: True
+								Label@ASSETS_LOST:
 									X: 295
 									Y: 0
 									Width: 60
 									Height: PARENT_BOTTOM
+									Shadow: True
 								Label@UNITS_KILLED:
 									X: 395
 									Y: 0
 									Width: 40
 									Height: PARENT_BOTTOM
 									Align: Right
+									Shadow: True
 								Label@UNITS_DEAD:
 									X: 495
 									Y: 0
 									Width: 40
 									Height: PARENT_BOTTOM
 									Align: Right
+									Shadow: True
 								Label@BUILDINGS_KILLED:
 									X: 615
 									Y: 0
 									Width: 40
 									Height: PARENT_BOTTOM
 									Align: Right
+									Shadow: True
 								Label@BUILDINGS_DEAD:
 									X: 715
 									Y: 0
 									Width: 40
 									Height: PARENT_BOTTOM
 									Align: Right
+									Shadow: True
+								Label@ARMY_VALUE:
+									X: 815
+									Y: 0
+									Width: 40
+									Height: PARENT_BOTTOM
+									Align: Right
+									Shadow: True
 						Container@EARNED_THIS_MIN_GRAPH_TEMPLATE:
 							X: 0
 							Y: 0
-							Width: PARENT_RIGHT-100
-							Height: PARENT_BOTTOM-50
+							Width: PARENT_RIGHT - 100
+							Height: PARENT_BOTTOM - 50
 							Children:
 								LineGraph@EARNED_THIS_MIN_GRAPH:
+									X: 0
+									Y: 0
+									Width: PARENT_RIGHT
+									Height: PARENT_BOTTOM
+									ValueFormat: ${0}
+									XAxisValueFormat: {0}
+									YAxisValueFormat: ${0:F0}
+									XAxisSize: 20
+									YAxisSize: 10
+									XAxisLabel: m
+									YAxisLabel: $
+									LabelFont: TinyBold
+									AxisFont: Bold
+						Container@ARMY_THIS_MIN_GRAPH_TEMPLATE:
+							X: 0
+							Y: 0
+							Width: PARENT_RIGHT - 100
+							Height: PARENT_BOTTOM - 50
+							Children:
+								LineGraph@ARMY_THIS_MIN_GRAPH:
 									X: 0
 									Y: 0
 									Width: PARENT_RIGHT

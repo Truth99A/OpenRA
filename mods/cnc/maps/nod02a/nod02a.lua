@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 NodUnits = { "bggy", "e1", "e1", "e1", "e1", "e1", "bggy", "e1", "e1", "e1", "bggy" }
 NodBaseBuildings = { "hand", "fact", "nuke" }
 
@@ -26,7 +34,7 @@ getActors = function(owner, units)
 	local maxUnits = 0
 	local actors = { }
 	for type, count in pairs(units) do
-		local globalActors = Map.ActorsInBox(Map.TopLeft, Map.BottomRight, function(actor)
+		local globalActors = Utils.Where(Map.ActorsInWorld, function(actor)
 			return actor.Owner == owner and actor.Type == type and not actor.IsDead
 		end)
 		if #globalActors < count then
@@ -234,7 +242,7 @@ Tick = function()
 end
 
 checkProduction = function(player)
-	local Units = Map.ActorsInBox(Map.TopLeft, Map.BottomRight, function(actor)
+	local Units = Utils.Where(Map.ActorsInWorld, function(actor)
 		return actor.Owner == player and actor.Type == UnitToRebuild
 	end)
 
@@ -251,7 +259,7 @@ checkProduction = function(player)
 end
 
 getStartUnits = function()
-	local Units = Map.ActorsInBox(Map.TopLeft, Map.BottomRight, function(actor)
+	local Units = Utils.Where(Map.ActorsInWorld, function(actor)
 		return actor.Owner == enemy
 	end)
 	Utils.Do(Units, function(unit)

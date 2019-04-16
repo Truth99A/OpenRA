@@ -1,21 +1,24 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Mods.Common.Lint;
 using OpenRA.Mods.Common.Orders;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Mods.Common.Traits.Render;
 using OpenRA.Network;
+using OpenRA.Primitives;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets
@@ -24,13 +27,14 @@ namespace OpenRA.Mods.Common.Widgets
 	{
 		public ActorInfo Actor;
 		public string Name;
-		public Hotkey Hotkey;
+		public HotkeyReference Hotkey;
 		public Sprite Sprite;
 		public PaletteReference Palette;
 		public PaletteReference IconClockPalette;
 		public PaletteReference IconDarkenPalette;
 		public float2 Pos;
 		public List<ProductionItem> Queued;
+		public ProductionQueue ProductionQueue;
 	}
 
 	public class ProductionPaletteWidget : Widget
@@ -43,10 +47,14 @@ namespace OpenRA.Mods.Common.Widgets
 		public readonly int2 IconMargin = int2.Zero;
 		public readonly int2 IconSpriteOffset = int2.Zero;
 
-		public readonly string TabClick = null;
-		public readonly string DisabledTabClick = null;
+		public readonly string ClickSound = ChromeMetrics.Get<string>("ClickSound");
+		public readonly string ClickDisabledSound = ChromeMetrics.Get<string>("ClickDisabledSound");
 		public readonly string TooltipContainer;
 		public readonly string TooltipTemplate = "PRODUCTION_TOOLTIP";
+
+		// Note: LinterHotkeyNames assumes that these are disabled by default
+		public readonly string HotkeyPrefix = null;
+		public readonly int HotkeyCount = 0;
 
 		public readonly string ClockAnimation = "clock";
 		public readonly string ClockSequence = "idle";
@@ -56,15 +64,20 @@ namespace OpenRA.Mods.Common.Widgets
 		public readonly string NotBuildableSequence = "idle";
 		public readonly string NotBuildablePalette = "chrome";
 
+		public readonly bool DrawTime = true;
+
 		[Translate] public readonly string ReadyText = "";
 		[Translate] public readonly string HoldText = "";
+		[Translate] public readonly string InfiniteSymbol = "\u221E";
 
 		public int DisplayedIconCount { get; private set; }
 		public int TotalIconCount { get; private set; }
 		public event Action<int, int> OnIconCountChanged = (a, b) => { };
 
 		public ProductionIcon TooltipIcon { get; private set; }
+		public Func<ProductionIcon> GetTooltipIcon;
 		public readonly World World;
+		readonly ModData modData;
 		readonly OrderManager orderManager;
 
 		public int MinimumRows = 4;
@@ -75,6 +88,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 		Lazy<TooltipContainerWidget> tooltipContainer;
 		ProductionQueue currentQueue;
+		HotkeyReference[] hotkeys;
 
 		public ProductionQueue CurrentQueue
 		{
@@ -86,22 +100,59 @@ namespace OpenRA.Mods.Common.Widgets
 		Dictionary<Rectangle, ProductionIcon> icons = new Dictionary<Rectangle, ProductionIcon>();
 		Animation cantBuild, clock;
 		Rectangle eventBounds = Rectangle.Empty;
+
 		readonly WorldRenderer worldRenderer;
-		SpriteFont overlayFont;
-		float2 holdOffset, readyOffset, timeOffset, queuedOffset;
+
+		SpriteFont overlayFont, symbolFont;
+		float2 holdOffset, readyOffset, timeOffset, queuedOffset, infiniteOffset;
+
+		[CustomLintableHotkeyNames]
+		public static IEnumerable<string> LinterHotkeyNames(MiniYamlNode widgetNode, Action<string> emitError, Action<string> emitWarning)
+		{
+			var prefix = "";
+			var prefixNode = widgetNode.Value.Nodes.FirstOrDefault(n => n.Key == "HotkeyPrefix");
+			if (prefixNode != null)
+				prefix = prefixNode.Value.Value;
+
+			var count = 0;
+			var countNode = widgetNode.Value.Nodes.FirstOrDefault(n => n.Key == "HotkeyCount");
+			if (countNode != null)
+				count = FieldLoader.GetValue<int>("HotkeyCount", countNode.Value.Value);
+
+			if (count == 0)
+				return new string[0];
+
+			if (string.IsNullOrEmpty(prefix))
+				emitError("{0} must define HotkeyPrefix if HotkeyCount > 0.".F(widgetNode.Location));
+
+			return Exts.MakeArray(count, i => prefix + (i + 1).ToString("D2"));
+		}
 
 		[ObjectCreator.UseCtor]
-		public ProductionPaletteWidget(OrderManager orderManager, World world, WorldRenderer worldRenderer)
+		public ProductionPaletteWidget(ModData modData, OrderManager orderManager, World world, WorldRenderer worldRenderer)
 		{
+			this.modData = modData;
 			this.orderManager = orderManager;
-			this.World = world;
+			World = world;
 			this.worldRenderer = worldRenderer;
+			GetTooltipIcon = () => TooltipIcon;
 			tooltipContainer = Exts.Lazy(() =>
 				Ui.Root.Get<TooltipContainerWidget>(TooltipContainer));
 
 			cantBuild = new Animation(world, NotBuildableAnimation);
 			cantBuild.PlayFetchIndex(NotBuildableSequence, () => 0);
 			clock = new Animation(world, ClockAnimation);
+
+			overlayFont = Game.Renderer.Fonts["TinyBold"];
+			Game.Renderer.Fonts.TryGetValue("Symbols", out symbolFont);
+		}
+
+		public override void Initialize(WidgetArgs args)
+		{
+			base.Initialize(args);
+
+			hotkeys = Exts.MakeArray(HotkeyCount,
+				i => modData.Hotkeys[HotkeyPrefix + (i + 1).ToString("D2")]);
 		}
 
 		public void ScrollDown()
@@ -162,7 +213,7 @@ namespace OpenRA.Mods.Common.Widgets
 		{
 			if (TooltipContainer != null)
 				tooltipContainer.Value.SetTooltip(TooltipTemplate,
-					new WidgetArgs() { { "world", World }, { "palette", this } });
+					new WidgetArgs() { { "player", World.LocalPlayer }, { "getTooltipIcon", GetTooltipIcon } });
 		}
 
 		public override void MouseExited()
@@ -195,7 +246,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 			if (item != null && item.Done && actor.HasTraitInfo<BuildingInfo>())
 			{
-				World.OrderGenerator = new PlaceBuildingOrderGenerator(CurrentQueue, icon.Name);
+				World.OrderGenerator = new PlaceBuildingOrderGenerator(CurrentQueue, icon.Name, worldRenderer);
 				return true;
 			}
 
@@ -212,29 +263,41 @@ namespace OpenRA.Mods.Common.Widgets
 			}
 		}
 
-		bool HandleLeftClick(ProductionItem item, ProductionIcon icon, int handleCount)
+		bool HandleLeftClick(ProductionItem item, ProductionIcon icon, int handleCount, Modifiers modifiers)
 		{
 			if (PickUpCompletedBuildingIcon(icon, item))
 			{
-				Game.Sound.Play(TabClick);
+				Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Sounds", ClickSound, null);
 				return true;
 			}
 
 			if (item != null && item.Paused)
 			{
 				// Resume a paused item
-				Game.Sound.Play(TabClick);
+				Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Sounds", ClickSound, null);
+				Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Speech", CurrentQueue.Info.QueuedAudio, World.LocalPlayer.Faction.InternalName);
 				World.IssueOrder(Order.PauseProduction(CurrentQueue.Actor, icon.Name, false));
 				return true;
 			}
 
-			if (CurrentQueue.BuildableItems().Any(a => a.Name == icon.Name))
+			var buildable = CurrentQueue.BuildableItems().FirstOrDefault(a => a.Name == icon.Name);
+
+			if (buildable != null)
 			{
 				// Queue a new item
-				Game.Sound.Play(TabClick);
-				Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Speech", CurrentQueue.Info.QueuedAudio, World.LocalPlayer.Faction.InternalName);
-				World.IssueOrder(Order.StartProduction(CurrentQueue.Actor, icon.Name, handleCount));
-				return true;
+				Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Sounds", ClickSound, null);
+				string notification;
+				var canQueue = CurrentQueue.CanQueue(buildable, out notification);
+
+				if (!CurrentQueue.AllQueued().Any())
+					Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Speech", notification, World.LocalPlayer.Faction.InternalName);
+
+				if (canQueue)
+				{
+					var queued = !modifiers.HasModifier(Modifiers.Ctrl);
+					World.IssueOrder(Order.StartProduction(CurrentQueue.Actor, icon.Name, handleCount, queued));
+					return true;
+				}
 			}
 
 			return false;
@@ -245,11 +308,11 @@ namespace OpenRA.Mods.Common.Widgets
 			if (item == null)
 				return false;
 
-			Game.Sound.Play(TabClick);
+			Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Sounds", ClickSound, null);
 
-			if (item.Paused || item.Done || item.TotalCost == item.RemainingCost)
+			if (CurrentQueue.Info.DisallowPaused || item.Paused || item.Done || item.TotalCost == item.RemainingCost)
 			{
-				// Instant cancel of things we have not started yet and things that are finished
+				// Instantly cancel items that haven't started, have finished, or if the queue doesn't support pausing
 				Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Speech", CurrentQueue.Info.CancelledAudio, World.LocalPlayer.Faction.InternalName);
 				World.IssueOrder(Order.CancelProduction(CurrentQueue.Actor, icon.Name, handleCount));
 			}
@@ -269,7 +332,7 @@ namespace OpenRA.Mods.Common.Widgets
 				return false;
 
 			// Directly cancel, skipping "on-hold"
-			Game.Sound.Play(TabClick);
+			Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Sounds", ClickSound, null);
 			Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Speech", CurrentQueue.Info.CancelledAudio, World.LocalPlayer.Faction.InternalName);
 			World.IssueOrder(Order.CancelProduction(CurrentQueue.Actor, icon.Name, handleCount));
 
@@ -279,15 +342,17 @@ namespace OpenRA.Mods.Common.Widgets
 		bool HandleEvent(ProductionIcon icon, MouseButton btn, Modifiers modifiers)
 		{
 			var startCount = modifiers.HasModifier(Modifiers.Shift) ? 5 : 1;
-			var cancelCount = modifiers.HasModifier(Modifiers.Ctrl) ? CurrentQueue.QueueLength : startCount;
+
+			// PERF: avoid an unnecessary enumeration by casting back to its known type
+			var cancelCount = modifiers.HasModifier(Modifiers.Ctrl) ? ((List<ProductionItem>)CurrentQueue.AllQueued()).Count : startCount;
 			var item = icon.Queued.FirstOrDefault();
-			var handled = btn == MouseButton.Left ? HandleLeftClick(item, icon, startCount)
+			var handled = btn == MouseButton.Left ? HandleLeftClick(item, icon, startCount, modifiers)
 				: btn == MouseButton.Right ? HandleRightClick(item, icon, cancelCount)
 				: btn == MouseButton.Middle ? HandleMiddleClick(item, icon, cancelCount)
 				: false;
 
 			if (!handled)
-				Game.Sound.Play(DisabledTabClick);
+				Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Sounds", ClickDisabledSound, null);
 
 			return true;
 		}
@@ -297,9 +362,12 @@ namespace OpenRA.Mods.Common.Widgets
 			if (e.Event == KeyInputEvent.Up || CurrentQueue == null)
 				return false;
 
-			var hotkey = Hotkey.FromKeyInput(e);
-			var toBuild = icons.Values.FirstOrDefault(i => i.Hotkey == hotkey);
-			return toBuild != null ? HandleEvent(toBuild, MouseButton.Left, Modifiers.None) : false;
+			var batchModifiers = e.Modifiers.HasModifier(Modifiers.Shift) ? Modifiers.Shift : Modifiers.None;
+
+			// HACK: enable production if the shift key is pressed
+			e.Modifiers &= ~Modifiers.Shift;
+			var toBuild = icons.Values.FirstOrDefault(i => i.Hotkey != null && i.Hotkey.IsActivatedBy(e));
+			return toBuild != null ? HandleEvent(toBuild, MouseButton.Left, batchModifiers) : false;
 		}
 
 		public void RefreshIcons()
@@ -320,7 +388,6 @@ namespace OpenRA.Mods.Common.Widgets
 			var oldIconCount = DisplayedIconCount;
 			DisplayedIconCount = 0;
 
-			var ks = Game.Settings.Keys;
 			var rb = RenderBounds;
 			var faction = producer.Trait.Faction;
 
@@ -331,22 +398,22 @@ namespace OpenRA.Mods.Common.Widgets
 				var rect = new Rectangle(rb.X + x * (IconSize.X + IconMargin.X), rb.Y + y * (IconSize.Y + IconMargin.Y), IconSize.X, IconSize.Y);
 
 				var rsi = item.TraitInfo<RenderSpritesInfo>();
-				var icon = new Animation(World, rsi.GetImage(item, World.Map.SequenceProvider, faction));
-				icon.Play(item.TraitInfo<TooltipInfo>().Icon);
-
+				var icon = new Animation(World, rsi.GetImage(item, World.Map.Rules.Sequences, faction));
 				var bi = item.TraitInfo<BuildableInfo>();
+				icon.Play(bi.Icon);
 
 				var pi = new ProductionIcon()
 				{
 					Actor = item,
 					Name = item.Name,
-					Hotkey = ks.GetProductionHotkey(DisplayedIconCount),
+					Hotkey = DisplayedIconCount < HotkeyCount ? hotkeys[DisplayedIconCount] : null,
 					Sprite = icon.Image,
 					Palette = worldRenderer.Palette(bi.IconPalette),
 					IconClockPalette = worldRenderer.Palette(ClockPalette),
 					IconDarkenPalette = worldRenderer.Palette(NotBuildablePalette),
 					Pos = new float2(rect.Location),
-					Queued = CurrentQueue.AllQueued().Where(a => a.Item == item.Name).ToList()
+					Queued = currentQueue.AllQueued().Where(a => a.Item == item.Name).ToList(),
+					ProductionQueue = currentQueue
 				};
 
 				icons.Add(rect, pi);
@@ -363,19 +430,22 @@ namespace OpenRA.Mods.Common.Widgets
 		{
 			var iconOffset = 0.5f * IconSize.ToFloat2() + IconSpriteOffset;
 
-			overlayFont = Game.Renderer.Fonts["TinyBold"];
 			timeOffset = iconOffset - overlayFont.Measure(WidgetUtils.FormatTime(0, World.Timestep)) / 2;
 			queuedOffset = new float2(4, 2);
 			holdOffset = iconOffset - overlayFont.Measure(HoldText) / 2;
 			readyOffset = iconOffset - overlayFont.Measure(ReadyText) / 2;
+
+			if (ChromeMetrics.TryGet("InfiniteOffset", out infiniteOffset))
+				infiniteOffset += queuedOffset;
+			else
+				infiniteOffset = queuedOffset;
 
 			if (CurrentQueue == null)
 				return;
 
 			var buildableItems = CurrentQueue.BuildableItems();
 
-			var pio = currentQueue.Actor.Owner.PlayerActor.TraitsImplementing<IProductionIconOverlay>().FirstOrDefault();
-			var pioOffset = pio != null ? pio.Offset(IconSize) : new float2(0, 0);
+			var pios = currentQueue.Actor.Owner.PlayerActor.TraitsImplementing<IProductionIconOverlay>();
 
 			// Icons
 			foreach (var icon in icons.Values)
@@ -383,8 +453,9 @@ namespace OpenRA.Mods.Common.Widgets
 				WidgetUtils.DrawSHPCentered(icon.Sprite, icon.Pos + iconOffset, icon.Palette);
 
 				// Draw the ProductionIconOverlay's sprite
-				if (pio != null && pio.IsOverlayActive(icon.Actor))
-					WidgetUtils.DrawSHPCentered(pio.Sprite(), icon.Pos + iconOffset + pioOffset, worldRenderer.Palette(pio.Palette()), pio.Scale());
+				var pio = pios.FirstOrDefault(p => p.IsOverlayActive(icon.Actor));
+				if (pio != null)
+					WidgetUtils.DrawSHPCentered(pio.Sprite, icon.Pos + iconOffset + pio.Offset(IconSize), worldRenderer.Palette(pio.Palette), 1f);
 
 				// Build progress
 				if (icon.Queued.Count > 0)
@@ -408,7 +479,7 @@ namespace OpenRA.Mods.Common.Widgets
 				if (total > 0)
 				{
 					var first = icon.Queued[0];
-					var waiting = first != CurrentQueue.CurrentItem() && !first.Done;
+					var waiting = !CurrentQueue.IsProducing(first) && !first.Done;
 					if (first.Done)
 					{
 						if (ReadyTextStyle == ReadyTextStyleOptions.Solid || orderManager.LocalFrameNumber * worldRenderer.World.Timestep / 360 % 2 == 0)
@@ -418,17 +489,21 @@ namespace OpenRA.Mods.Common.Widgets
 					}
 					else if (first.Paused)
 						overlayFont.DrawTextWithContrast(HoldText,
-														 icon.Pos + holdOffset,
-														 Color.White, Color.Black, 1);
-					else if (!waiting)
-						overlayFont.DrawTextWithContrast(WidgetUtils.FormatTime(first.RemainingTimeActual, World.Timestep),
-														 icon.Pos + timeOffset,
-														 Color.White, Color.Black, 1);
+							icon.Pos + holdOffset,
+							Color.White, Color.Black, 1);
+					else if (!waiting && DrawTime)
+						overlayFont.DrawTextWithContrast(WidgetUtils.FormatTime(first.Queue.RemainingTimeActual(first), World.Timestep),
+							icon.Pos + timeOffset,
+							Color.White, Color.Black, 1);
 
-					if (total > 1 || waiting)
+					if (first.Infinite)
+						symbolFont.DrawTextWithContrast(InfiniteSymbol,
+							icon.Pos + infiniteOffset,
+							Color.White, Color.Black, 1);
+					else if (total > 1 || waiting)
 						overlayFont.DrawTextWithContrast(total.ToString(),
-														 icon.Pos + queuedOffset,
-														 Color.White, Color.Black, 1);
+							icon.Pos + queuedOffset,
+							Color.White, Color.Black, 1);
 				}
 			}
 		}

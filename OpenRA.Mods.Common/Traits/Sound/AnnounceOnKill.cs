@@ -1,16 +1,17 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using OpenRA.Traits;
 
-namespace OpenRA.Mods.Common.Traits
+namespace OpenRA.Mods.Common.Traits.Sound
 {
 	[Desc("Play the Kill voice of this actor when eliminating enemies.")]
 	public class AnnounceOnKillInfo : ITraitInfo
@@ -36,7 +37,7 @@ namespace OpenRA.Mods.Common.Traits
 			lastAnnounce = -info.Interval * 25;
 		}
 
-		public void AppliedDamage(Actor self, Actor damaged, AttackInfo e)
+		void INotifyAppliedDamage.AppliedDamage(Actor self, Actor damaged, AttackInfo e)
 		{
 			// Don't notify suicides
 			if (e.DamageState == DamageState.Dead && damaged != e.Attacker)

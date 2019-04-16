@@ -1,18 +1,19 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using OpenRA.Primitives;
+using OpenRA.Support;
 
 namespace OpenRA.Network
 {
@@ -33,12 +34,13 @@ namespace OpenRA.Network
 
 		public string ServerError = "Server is not responding";
 		public bool AuthenticationFailed = false;
+		public ExternalMod ServerExternalMod = null;
 
 		public int NetFrameNumber { get; private set; }
 		public int LocalFrameNumber;
 		public int FramesAhead = 0;
 
-		public int LastTickTime = Game.RunTime;
+		public long LastTickTime = Game.RunTime;
 
 		public bool GameStarted { get { return NetFrameNumber != 0; } }
 		public IConnection Connection { get; private set; }
@@ -50,6 +52,7 @@ namespace OpenRA.Network
 		public readonly ReadOnlyList<ChatLine> ChatCache;
 
 		bool disposed;
+		bool generateSyncReport = false;
 
 		void OutOfSync(int frame)
 		{
@@ -59,7 +62,12 @@ namespace OpenRA.Network
 
 		public void StartGame()
 		{
-			if (GameStarted) return;
+			if (GameStarted)
+				return;
+
+			// Generating sync reports is expensive, so only do it if we have
+			// other players to compare against if a desync did occur
+			generateSyncReport = !(Connection is ReplayConnection) && LobbyInfo.GlobalSettings.EnableSyncReports;
 
 			NetFrameNumber = 1;
 			for (var i = NetFrameNumber; i <= FramesAhead; i++)
@@ -178,7 +186,9 @@ namespace OpenRA.Network
 
 			Connection.SendSync(NetFrameNumber, OrderIO.SerializeSync(World.SyncHash()));
 
-			syncReport.UpdateSyncReport();
+			if (generateSyncReport)
+				using (new PerfSample("sync_report"))
+					syncReport.UpdateSyncReport();
 
 			++NetFrameNumber;
 		}

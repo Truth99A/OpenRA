@@ -11,6 +11,7 @@ obj
 *.CodeAnalysisLog.xml
 *.lastcodeanalysissucceeded
 _ReSharper.*/
+/.vs
 
 # movies
 *.vqa
@@ -21,6 +22,7 @@ _ReSharper.*/
 # binaries
 mods/*/*.dll
 mods/*/*.mdb
+mods/*/*.pdb
 /*.dll
 /*.dll.config
 /*.so
@@ -60,9 +62,12 @@ OpenRA.Launcher.Mac/OpenRA.xcodeproj/*.mode1v3
 
 # auto-generated documentation
 DOCUMENTATION.md
+WEAPONS.md
 Lua-API.md
+Settings.md
 *.html
 openra.6
+update.log
 
 # StyleCop
 *.Cache
@@ -75,3 +80,9 @@ StyleCopViolations.xml
 # NUnit
 /TestResult.xml
 /lib/
+
+# Support directory
+/Support
+
+# IntelliJ files
+.idea

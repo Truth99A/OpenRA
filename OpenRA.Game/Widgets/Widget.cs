@@ -1,27 +1,28 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Primitives;
 using OpenRA.Support;
 
 namespace OpenRA.Widgets
 {
 	public static class Ui
 	{
-		public static Widget Root = new RootWidget();
+		public static Widget Root = new ContainerWidget();
 
-		public static int LastTickTime = Game.RunTime;
+		public static long LastTickTime = Game.RunTime;
 
 		static readonly Stack<Widget> WindowList = new Stack<Widget>();
 
@@ -32,9 +33,23 @@ namespace OpenRA.Widgets
 		public static void CloseWindow()
 		{
 			if (WindowList.Count > 0)
-				Root.RemoveChild(WindowList.Pop());
+			{
+				var hidden = WindowList.Pop();
+				Root.RemoveChild(hidden);
+				if (hidden.LogicObjects != null)
+					foreach (var l in hidden.LogicObjects)
+						l.BecameHidden();
+			}
+
 			if (WindowList.Count > 0)
-				Root.AddChild(WindowList.Peek());
+			{
+				var restore = WindowList.Peek();
+				Root.AddChild(restore);
+
+				if (restore.LogicObjects != null)
+					foreach (var l in restore.LogicObjects)
+						l.BecameVisible();
+			}
 		}
 
 		public static Widget OpenWindow(string id)
@@ -93,7 +108,7 @@ namespace OpenRA.Widgets
 			if (mi.Event == MouseInputEvent.Move)
 			{
 				Viewport.LastMousePos = mi.Location;
-				Viewport.TicksSinceLastMove = 0;
+				Viewport.LastMoveRunTime = Game.RunTime;
 			}
 
 			if (wasMouseOver != MouseOverWidget)
@@ -108,6 +123,9 @@ namespace OpenRA.Widgets
 			return handled;
 		}
 
+		/// <summary>Possibly handle keyboard input (if this widget has keyboard focus)</summary>
+		/// <returns><c>true</c>, if keyboard input was handled, <c>false</c> if the input should bubble to the parent widget</returns>
+		/// <param name="e">Key input data</param>
 		public static bool HandleKeyPress(KeyInput e)
 		{
 			if (KeyboardFocusWidget != null)
@@ -144,6 +162,8 @@ namespace OpenRA.Widgets
 	{
 		public void Dispose() { Dispose(true); GC.SuppressFinalize(this); }
 		public virtual void Tick() { }
+		public virtual void BecameHidden() { }
+		public virtual void BecameVisible() { }
 		protected virtual void Dispose(bool disposing) { }
 	}
 
@@ -264,8 +284,15 @@ namespace OpenRA.Widgets
 			// PERF: Avoid LINQ.
 			var bounds = EventBounds;
 			foreach (var child in Children)
+			{
 				if (child.IsVisible())
-					bounds = Rectangle.Union(bounds, child.GetEventBounds());
+				{
+					var childBounds = child.GetEventBounds();
+					if (childBounds != Rectangle.Empty)
+						bounds = Rectangle.Union(bounds, childBounds);
+				}
+			}
+
 			return bounds;
 		}
 
@@ -345,6 +372,10 @@ namespace OpenRA.Widgets
 
 		public virtual void MouseEntered() { }
 		public virtual void MouseExited() { }
+
+		/// <summary>Possibly handles mouse input (click, drag, scroll, etc).</summary>
+		/// <returns><c>true</c>, if mouse input was handled, <c>false</c> if the input should bubble to the parent widget</returns>
+		/// <param name="mi">Mouse input data</param>
 		public virtual bool HandleMouseInput(MouseInput mi) { return false; }
 
 		public bool HandleMouseInputOuter(MouseInput mi)
@@ -503,7 +534,7 @@ namespace OpenRA.Widgets
 
 		public Widget GetOrNull(string id)
 		{
-			if (this.Id == id)
+			if (Id == id)
 				return this;
 
 			foreach (var child in Children)

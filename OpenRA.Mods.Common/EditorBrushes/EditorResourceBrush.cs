@@ -1,26 +1,17 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System;
-using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
-using OpenRA.FileFormats;
 using OpenRA.Graphics;
-using OpenRA.Mods.Common;
-using OpenRA.Mods.Common.Graphics;
 using OpenRA.Mods.Common.Traits;
-using OpenRA.Orders;
-using OpenRA.Primitives;
-using OpenRA.Traits;
-using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets
 {
@@ -45,9 +36,8 @@ namespace OpenRA.Mods.Common.Widgets
 			preview.GetScale = () => worldRenderer.Viewport.Zoom;
 			preview.IsVisible = () => editorWidget.CurrentBrush == this;
 
-			var variant = resource.Variants.FirstOrDefault();
-			var sequenceProvider = wr.World.Map.Rules.Sequences[world.TileSet.Id];
-			var sequence = sequenceProvider.GetSequence("resources", variant);
+			var variant = resource.Sequences.FirstOrDefault();
+			var sequence = wr.World.Map.Rules.Sequences.GetSequence("resources", variant);
 			var sprite = sequence.GetSprite(resource.MaxDensity - 1);
 			preview.GetSprite = () => sprite;
 
@@ -79,7 +69,7 @@ namespace OpenRA.Mods.Common.Widgets
 			{
 				var type = (byte)ResourceType.ResourceType;
 				var index = (byte)ResourceType.MaxDensity;
-				world.Map.MapResources.Value[cell] = new ResourceTile(type, index);
+				world.Map.Resources[cell] = new ResourceTile(type, index);
 			}
 
 			return true;
@@ -87,16 +77,16 @@ namespace OpenRA.Mods.Common.Widgets
 
 		public bool AllowResourceAt(CPos cell)
 		{
-			var mapResources = world.Map.MapResources.Value;
+			var mapResources = world.Map.Resources;
 			if (!mapResources.Contains(cell))
 				return false;
 
-			var tile = world.Map.MapTiles.Value[cell];
-			var tileInfo = world.TileSet.GetTileInfo(tile);
+			var tile = world.Map.Tiles[cell];
+			var tileInfo = world.Map.Rules.TileSet.GetTileInfo(tile);
 			if (tileInfo == null)
 				return false;
 
-			var terrainType = world.TileSet.TerrainInfo[tileInfo.TerrainType];
+			var terrainType = world.Map.Rules.TileSet.TerrainInfo[tileInfo.TerrainType];
 
 			if (mapResources[cell].Type == ResourceType.ResourceType)
 				return false;

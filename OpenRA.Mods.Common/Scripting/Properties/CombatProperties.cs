@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -23,13 +24,11 @@ namespace OpenRA.Mods.Common.Scripting
 	public class CombatProperties : ScriptActorProperties, Requires<AttackBaseInfo>, Requires<IMoveInfo>
 	{
 		readonly IMove move;
-		readonly AttackBase attackBase;
 
 		public CombatProperties(ScriptContext context, Actor self)
 			: base(context, self)
 		{
 			move = self.Trait<IMove>();
-			attackBase = self.Trait<AttackBase>();
 		}
 
 		[ScriptActorPropertyActivity]
@@ -45,7 +44,7 @@ namespace OpenRA.Mods.Common.Scripting
 			"close enough to complete the activity.")]
 		public void AttackMove(CPos cell, int closeEnough = 0)
 		{
-			Self.QueueActivity(new AttackMoveActivity(Self, move.MoveTo(cell, closeEnough)));
+			Self.QueueActivity(new AttackMoveActivity(Self, () => move.MoveTo(cell, closeEnough)));
 		}
 
 		[ScriptActorPropertyActivity]
@@ -55,7 +54,7 @@ namespace OpenRA.Mods.Common.Scripting
 		{
 			foreach (var wpt in waypoints)
 			{
-				Self.QueueActivity(new AttackMoveActivity(Self, move.MoveTo(wpt, 2)));
+				Self.QueueActivity(new AttackMoveActivity(Self, () => move.MoveTo(wpt, 2)));
 				Self.QueueActivity(new Wait(wait));
 			}
 
@@ -75,18 +74,37 @@ namespace OpenRA.Mods.Common.Scripting
 				using (var f = func.CopyReference() as LuaFunction)
 					Self.QueueActivity(new CallFunc(() => PatrolUntil(waypoints, f, wait)));
 		}
+	}
+
+	[ScriptPropertyGroup("Combat")]
+	public class GeneralCombatProperties : ScriptActorProperties, Requires<AttackBaseInfo>
+	{
+		readonly AttackBase[] attackBases;
+
+		public GeneralCombatProperties(ScriptContext context, Actor self)
+			: base(context, self)
+		{
+			attackBases = self.TraitsImplementing<AttackBase>().ToArray();
+		}
 
 		[Desc("Attack the target actor. The target actor needs to be visible.")]
 		public void Attack(Actor targetActor, bool allowMove = true, bool forceAttack = false)
 		{
 			var target = Target.FromActor(targetActor);
-			if (!target.IsValidFor(Self) || target.Type == TargetType.FrozenActor)
+			if (!target.IsValidFor(Self))
 				Log.Write("lua", "{1} is an invalid target for {0}!", Self, targetActor);
 
-			if (!targetActor.Info.HasTraitInfo<FrozenUnderFogInfo>() && !Self.Owner.CanTargetActor(targetActor))
+			if (!targetActor.Info.HasTraitInfo<FrozenUnderFogInfo>() && !targetActor.CanBeViewedByPlayer(Self.Owner))
 				Log.Write("lua", "{1} is not revealed for player {0}!", Self.Owner, targetActor);
 
-			attackBase.AttackTarget(target, true, allowMove, forceAttack);
+			foreach (var attack in attackBases)
+				attack.AttackTarget(target, true, allowMove, forceAttack);
+		}
+
+		[Desc("Checks if the targeted actor is a valid target for this actor.")]
+		public bool CanTarget(Actor targetActor)
+		{
+			return Target.FromActor(targetActor).IsValidFor(Self);
 		}
 	}
 }

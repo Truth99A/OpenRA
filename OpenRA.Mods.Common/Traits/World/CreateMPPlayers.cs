@@ -1,13 +1,15 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Network;
@@ -20,19 +22,27 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class CreateMPPlayers : ICreatePlayers
 	{
-		public void CreatePlayers(World w)
+		void ICreatePlayers.CreatePlayers(World w)
 		{
 			var players = new MapPlayers(w.Map.PlayerDefinitions).Players;
 			var worldPlayers = new List<Player>();
+			var worldOwnerFound = false;
 
 			// Create the unplayable map players -- neutral, shellmap, scripted, etc.
 			foreach (var kv in players.Where(p => !p.Value.Playable))
 			{
 				var player = new Player(w, null, kv.Value);
 				worldPlayers.Add(player);
+
 				if (kv.Value.OwnsWorld)
-					w.WorldActor.Owner = player;
+				{
+					worldOwnerFound = true;
+					w.SetWorldOwner(player);
+				}
 			}
+
+			if (!worldOwnerFound)
+				throw new InvalidOperationException("Map {0} does not define a player actor owning the world.".F(w.Map.Title));
 
 			Player localPlayer = null;
 

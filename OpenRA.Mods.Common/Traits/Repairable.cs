@@ -1,44 +1,55 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("This actor can be sent to a structure for repairs.")]
-	class RepairableInfo : ITraitInfo, Requires<HealthInfo>
+	public class RepairableInfo : ITraitInfo, Requires<IHealthInfo>, Requires<IMoveInfo>
 	{
-		public readonly HashSet<string> RepairBuildings = new HashSet<string> { "fix" };
+		[FieldLoader.Require]
+		[ActorReference] public readonly HashSet<string> RepairActors = new HashSet<string> { };
 
 		[VoiceReference] public readonly string Voice = "Action";
+
+		[Desc("The amount the unit will be repaired at each step. Use -1 for fallback behavior where HpPerStep from RepairsUnits trait will be used.")]
+		public readonly int HpPerStep = -1;
 
 		public virtual object Create(ActorInitializer init) { return new Repairable(init.Self, this); }
 	}
 
-	class Repairable : IIssueOrder, IResolveOrder, IOrderVoice
+	public class Repairable : IIssueOrder, IResolveOrder, IOrderVoice, INotifyCreated
 	{
-		readonly RepairableInfo info;
-		readonly Health health;
-		readonly AmmoPool[] ammoPools;
+		public readonly RepairableInfo Info;
+		readonly IHealth health;
+		readonly IMove movement;
+		Rearmable rearmable;
 
 		public Repairable(Actor self, RepairableInfo info)
 		{
-			this.info = info;
-			health = self.Trait<Health>();
-			ammoPools = self.TraitsImplementing<AmmoPool>().ToArray();
+			Info = info;
+			health = self.Trait<IHealth>();
+			movement = self.Trait<IMove>();
+		}
+
+		void INotifyCreated.Created(Actor self)
+		{
+			rearmable = self.TraitOrDefault<Rearmable>();
 		}
 
 		public IEnumerable<IOrderTargeter> Orders
@@ -52,19 +63,19 @@ namespace OpenRA.Mods.Common.Traits
 		public Order IssueOrder(Actor self, IOrderTargeter order, Target target, bool queued)
 		{
 			if (order.OrderID == "Repair")
-				return new Order(order.OrderID, self, queued) { TargetActor = target.Actor };
+				return new Order(order.OrderID, self, target, queued);
 
 			return null;
 		}
 
 		bool CanRepairAt(Actor target)
 		{
-			return info.RepairBuildings.Contains(target.Info.Name);
+			return Info.RepairActors.Contains(target.Info.Name);
 		}
 
 		bool CanRearmAt(Actor target)
 		{
-			return info.RepairBuildings.Contains(target.Info.Name);
+			return rearmable != null && rearmable.Info.RearmActors.Contains(target.Info.Name);
 		}
 
 		bool CanRepair()
@@ -74,53 +85,68 @@ namespace OpenRA.Mods.Common.Traits
 
 		bool CanRearm()
 		{
-			return ammoPools.Any(x => !x.Info.SelfReloads && !x.FullAmmo());
+			return rearmable != null && rearmable.RearmableAmmoPools.Any(p => !p.FullAmmo());
 		}
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			return (order.OrderString == "Repair" && CanRepair()) ? info.Voice : null;
+			return order.OrderString == "Repair" && (CanRepair() || CanRearm()) ? Info.Voice : null;
 		}
 
 		public void ResolveOrder(Actor self, Order order)
 		{
 			if (order.OrderString == "Repair")
 			{
-				if (!CanRepairAt(order.TargetActor) || (!CanRepair() && !CanRearm()))
+				// Repair orders are only valid for own/allied actors,
+				// which are guaranteed to never be frozen.
+				if (order.Target.Type != TargetType.Actor)
 					return;
 
-				var movement = self.Trait<IMove>();
-				var target = Target.FromOrder(self.World, order);
-				self.SetTargetLine(target, Color.Green);
+				// Aircraft handle Repair orders directly in the Aircraft trait
+				if (self.Info.HasTraitInfo<AircraftInfo>())
+					return;
 
-				self.CancelActivity();
-				self.QueueActivity(new WaitForTransport(self, Util.SequenceActivities(new MoveAdjacentTo(self, target),
-					new CallFunc(() => AfterReachActivities(self, order, movement)))));
+				if (!CanRepairAt(order.Target.Actor) || (!CanRepair() && !CanRearm()))
+					return;
 
-				TryCallTransport(self, target, new CallFunc(() => AfterReachActivities(self, order, movement)));
+				if (!order.Queued)
+					self.CancelActivity();
+
+				self.SetTargetLine(order.Target, Color.Green);
+				var activities = ActivityUtils.SequenceActivities(self,
+					movement.MoveToTarget(self, order.Target, targetLineColor: Color.Green),
+					new CallFunc(() => AfterReachActivities(self, order, movement)));
+
+				self.QueueActivity(new WaitForTransport(self, activities));
+				TryCallTransport(self, order.Target, new CallFunc(() => AfterReachActivities(self, order, movement)));
 			}
 		}
 
 		void AfterReachActivities(Actor self, Order order, IMove movement)
 		{
-			if (!order.TargetActor.IsInWorld || order.TargetActor.IsDead || order.TargetActor.IsDisabled())
+			if (order.Target.Type != TargetType.Actor)
+				return;
+
+			var targetActor = order.Target.Actor;
+			if (!targetActor.IsInWorld || targetActor.IsDead || targetActor.TraitsImplementing<RepairsUnits>().All(r => r.IsTraitDisabled))
 				return;
 
 			// TODO: This is hacky, but almost every single component affected
 			// will need to be rewritten anyway, so this is OK for now.
-			self.QueueActivity(movement.MoveTo(self.World.Map.CellContaining(order.TargetActor.CenterPosition), order.TargetActor));
-			if (CanRearmAt(order.TargetActor) && CanRearm())
-				self.QueueActivity(new Rearm(self));
+			self.QueueActivity(movement.MoveTo(self.World.Map.CellContaining(targetActor.CenterPosition), targetActor));
+			if (CanRearmAt(targetActor) && CanRearm())
+				self.QueueActivity(new Rearm(self, targetActor, new WDist(512)));
 
-			self.QueueActivity(new Repair(order.TargetActor));
+			// Add a CloseEnough range of 512 to ensure we're at the host actor
+			self.QueueActivity(new Repair(self, targetActor, new WDist(512)));
 
-			var rp = order.TargetActor.TraitOrDefault<RallyPoint>();
+			var rp = targetActor.TraitOrDefault<RallyPoint>();
 			if (rp != null)
 			{
 				self.QueueActivity(new CallFunc(() =>
 				{
 					self.SetTargetLine(Target.FromCell(self.World, rp.Location), Color.Green);
-					self.QueueActivity(movement.MoveTo(rp.Location, order.TargetActor));
+					self.QueueActivity(movement.MoveTo(rp.Location, targetActor));
 				}));
 			}
 		}
@@ -129,8 +155,8 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var repairBuilding = self.World.ActorsWithTrait<RepairsUnits>()
 				.Where(a => !a.Actor.IsDead && a.Actor.IsInWorld
-					&& a.Actor.Owner == self.Owner &&
-					info.RepairBuildings.Contains(a.Actor.Info.Name))
+					&& a.Actor.Owner.IsAlliedWith(self.Owner) &&
+					Info.RepairActors.Contains(a.Actor.Info.Name))
 				.OrderBy(p => (self.Location - p.Actor.Location).LengthSquared);
 
 			// Worst case FirstOrDefault() will return a TraitPair<null, null>, which is OK.
@@ -139,15 +165,13 @@ namespace OpenRA.Mods.Common.Traits
 
 		static void TryCallTransport(Actor self, Target target, Activity nextActivity)
 		{
-			var transport = self.TraitOrDefault<ICallForTransport>();
-			if (transport == null)
-				return;
-
 			var targetCell = self.World.Map.CellContaining(target.CenterPosition);
-			if ((self.CenterPosition - target.CenterPosition).LengthSquared < transport.MinimumDistance.LengthSquared)
-				return;
+			var delta = (self.CenterPosition - target.CenterPosition).LengthSquared;
+			var transports = self.TraitsImplementing<ICallForTransport>()
+				.Where(t => t.MinimumDistance.LengthSquared < delta);
 
-			transport.RequestTransport(targetCell, nextActivity);
+			foreach (var t in transports)
+				t.RequestTransport(self, targetCell, nextActivity);
 		}
 	}
 }

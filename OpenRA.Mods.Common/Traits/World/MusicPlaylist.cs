@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -31,6 +32,9 @@ namespace OpenRA.Mods.Common.Traits
 			"It cannot be paused, but can be overridden by selecting a new track.")]
 		public readonly string BackgroundMusic = null;
 
+		[Desc("Disable all world sounds (combat etc).")]
+		public readonly bool DisableWorldSounds = false;
+
 		public object Create(ActorInitializer init) { return new MusicPlaylist(init.World, this); }
 	}
 
@@ -54,6 +58,9 @@ namespace OpenRA.Mods.Common.Traits
 			this.info = info;
 			this.world = world;
 
+			if (info.DisableWorldSounds)
+				Game.Sound.DisableWorldSounds = true;
+
 			IsMusicInstalled = world.Map.Rules.InstalledMusic.Any();
 			if (!IsMusicInstalled)
 				return;
@@ -73,10 +80,8 @@ namespace OpenRA.Mods.Common.Traits
 			}
 			else
 			{
-				// Start playback with a random song, but only if the player has installed more music
-				var installData = Game.ModData.Manifest.Get<ContentInstaller>();
-				if (playlist.Length > installData.ShippedSoundtracks)
-					currentSong = random.FirstOrDefault();
+				// Start playback with a random song
+				currentSong = random.FirstOrDefault();
 			}
 
 			if (SongExists(info.StartingMusic))
@@ -111,7 +116,7 @@ namespace OpenRA.Mods.Common.Traits
 			return playlist;
 		}
 
-		public void GameOver(World world)
+		void IGameOver.GameOver(World world)
 		{
 			if (world.LocalPlayer != null && world.LocalPlayer.WinState == WinState.Won)
 			{
@@ -217,10 +222,12 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public void Disposing(Actor self)
+		void INotifyActorDisposing.Disposing(Actor self)
 		{
 			if (currentSong != null)
 				Game.Sound.StopMusic();
+
+			Game.Sound.DisableWorldSounds = false;
 		}
 	}
 }

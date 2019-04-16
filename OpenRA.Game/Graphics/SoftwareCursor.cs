@@ -1,18 +1,17 @@
 #region Copyright & License Information
 /*
-* Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
-* This file is part of OpenRA, which is free software. It is made
-* available to you under the terms of the GNU General Public License
-* as published by the Free Software Foundation. For more information,
-* see COPYING.
-*/
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+ * This file is part of OpenRA, which is free software. It is made
+ * available to you under the terms of the GNU General Public License
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
+ */
 #endregion
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
-using OpenRA.Graphics;
 using OpenRA.Primitives;
 
 namespace OpenRA.Graphics
@@ -22,9 +21,10 @@ namespace OpenRA.Graphics
 		void Render(Renderer renderer);
 		void SetCursor(string cursor);
 		void Tick();
+		int Frame { get; }
 	}
 
-	public class SoftwareCursor : ICursor
+	public sealed class SoftwareCursor : ICursor
 	{
 		readonly HardwarePalette palette = new HardwarePalette();
 		readonly Cache<string, PaletteReference> paletteReferences;
@@ -51,7 +51,7 @@ namespace OpenRA.Graphics
 
 			sheetBuilder.Current.ReleaseBuffer();
 
-			Game.Renderer.Device.SetHardwareCursor(null);
+			Game.Renderer.Window.SetHardwareCursor(null);
 		}
 
 		PaletteReference CreatePaletteReference(string name)
@@ -78,18 +78,27 @@ namespace OpenRA.Graphics
 				return;
 
 			var cursorSequence = cursorProvider.GetCursorSequence(cursorName);
-			var cursorSprite = sprites[cursorName][((int)cursorFrame % cursorSequence.Length)];
+			var cursorSprite = sprites[cursorName][Frame];
 			var cursorSize = CursorProvider.CursorViewportZoomed ? 2.0f * cursorSprite.Size : cursorSprite.Size;
 
 			var cursorOffset = CursorProvider.CursorViewportZoomed ?
-				(2 * cursorSequence.Hotspot) + cursorSprite.Size.ToInt2() :
-				cursorSequence.Hotspot + (0.5f * cursorSprite.Size).ToInt2();
+				(2 * cursorSequence.Hotspot) + cursorSprite.Size.XY.ToInt2() :
+				cursorSequence.Hotspot + (0.5f * cursorSprite.Size.XY).ToInt2();
 
 			renderer.SetPalette(palette);
 			renderer.SpriteRenderer.DrawSprite(cursorSprite,
 				Viewport.LastMousePos - cursorOffset,
 				paletteReferences[cursorSequence.Palette],
 				cursorSize);
+		}
+
+		public int Frame
+		{
+			get
+			{
+				var cursorSequence = cursorProvider.GetCursorSequence(cursorName);
+				return (int)cursorFrame % cursorSequence.Length;
+			}
 		}
 
 		public void Dispose()

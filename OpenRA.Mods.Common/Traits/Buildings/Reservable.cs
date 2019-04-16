@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -22,17 +23,26 @@ namespace OpenRA.Mods.Common.Traits
 		Actor reservedFor;
 		Aircraft reservedForAircraft;
 
-		public void Tick(Actor self)
+		void ITick.Tick(Actor self)
 		{
+			// Nothing to do.
 			if (reservedFor == null)
-				return;		/* nothing to do */
+				return;
 
 			if (!Target.FromActor(reservedFor).IsValidFor(self))
-				reservedFor = null;		/* not likely to arrive now. */
+			{
+				// Not likely to arrive now.
+				reservedForAircraft.UnReserve();
+				reservedFor = null;
+				reservedForAircraft = null;
+			}
 		}
 
 		public IDisposable Reserve(Actor self, Actor forActor, Aircraft forAircraft)
 		{
+			if (reservedForAircraft != null && reservedForAircraft.MayYieldReservation)
+				reservedForAircraft.UnReserve();
+
 			reservedFor = forActor;
 			reservedForAircraft = forAircraft;
 
@@ -52,27 +62,26 @@ namespace OpenRA.Mods.Common.Traits
 		public static bool IsReserved(Actor a)
 		{
 			var res = a.TraitOrDefault<Reservable>();
-			return res != null && res.reservedFor != null;
+			return res != null && res.reservedForAircraft != null && !res.reservedForAircraft.MayYieldReservation;
 		}
 
-		public void Disposing(Actor self)
+		public static bool IsAvailableFor(Actor reservable, Actor forActor)
+		{
+			var res = reservable.TraitOrDefault<Reservable>();
+			return res == null || res.reservedForAircraft == null || res.reservedForAircraft.MayYieldReservation || res.reservedFor == forActor;
+		}
+
+		private void UnReserve()
 		{
 			if (reservedForAircraft != null)
 				reservedForAircraft.UnReserve();
 		}
 
-		public void OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)
-		{
-			if (reservedForAircraft != null)
-				reservedForAircraft.UnReserve();
-		}
+		void INotifyActorDisposing.Disposing(Actor self) { UnReserve(); }
 
-		public void Selling(Actor self) { Sold(self); }
+		void INotifyOwnerChanged.OnOwnerChanged(Actor self, Player oldOwner, Player newOwner) { UnReserve(); }
 
-		public void Sold(Actor self)
-		{
-			if (reservedForAircraft != null)
-				reservedForAircraft.UnReserve();
-		}
+		void INotifySold.Selling(Actor self) { UnReserve(); }
+		void INotifySold.Sold(Actor self) { UnReserve(); }
 	}
 }

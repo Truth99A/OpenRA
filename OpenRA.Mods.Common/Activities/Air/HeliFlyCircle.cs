@@ -1,41 +1,51 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Traits;
-using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Activities
 {
 	public class HeliFlyCircle : Activity
 	{
-		readonly Aircraft helicopter;
+		readonly Aircraft aircraft;
+		readonly int turnSpeedOverride;
 
-		public HeliFlyCircle(Actor self)
+		public HeliFlyCircle(Actor self, int turnSpeedOverride = -1)
 		{
-			helicopter = self.Trait<Aircraft>();
+			aircraft = self.Trait<Aircraft>();
+			this.turnSpeedOverride = turnSpeedOverride;
 		}
 
 		public override Activity Tick(Actor self)
 		{
-			if (IsCanceled)
+			// Refuse to take off if it would land immediately again.
+			if (aircraft.ForceLanding)
+			{
+				Cancel(self);
+				return NextActivity;
+			}
+
+			if (IsCanceling)
 				return NextActivity;
 
-			if (HeliFly.AdjustAltitude(self, helicopter, helicopter.Info.CruiseAltitude))
+			if (HeliFly.AdjustAltitude(self, aircraft, aircraft.Info.CruiseAltitude))
 				return this;
 
-			var move = helicopter.FlyStep(helicopter.Facing);
-			helicopter.SetPosition(self, helicopter.CenterPosition + move);
+			var move = aircraft.FlyStep(aircraft.Facing);
+			aircraft.SetPosition(self, aircraft.CenterPosition + move);
 
-			var desiredFacing = helicopter.Facing + 64;
-			helicopter.Facing = Util.TickFacing(helicopter.Facing, desiredFacing, helicopter.ROT / 3);
+			var desiredFacing = aircraft.Facing + 64;
+			var turnSpeed = turnSpeedOverride > -1 ? turnSpeedOverride : aircraft.TurnSpeed;
+			aircraft.Facing = Util.TickFacing(aircraft.Facing, desiredFacing, turnSpeed);
 
 			return this;
 		}

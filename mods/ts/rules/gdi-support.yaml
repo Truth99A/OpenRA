@@ -2,49 +2,66 @@ GAWALL:
 	Inherits: ^Wall
 	Buildable:
 		Queue: Defense
-		BuildPaletteOrder: 20
-		Prerequisites: ~structures.gdi
-	SoundOnDamageTransition:
-		DamagedSounds:
-		DestroyedSounds:
-	Valued:
-		Cost: 50
-	CustomSellValue:
-		Value: 0
+		BuildPaletteOrder: 10
+		Prerequisites: ~structures.gdi, ~techlevel.low
+		Description: Stops infantry and blocks enemy fire.\nCan NOT be crushed by tanks.
+	-SoundOnDamageTransition:
 	Tooltip:
 		Name: Concrete Wall
-		Description: Stops infantry and blocks enemy fire.\nCan NOT be crushed by tanks.
 	Health:
-		HP: 300
+		HP: 22500
 	Armor:
 		Type: Concrete
-	BlocksProjectiles:
-		Height: 640
 	Crushable:
 		CrushClasses: heavywall
 	LineBuild:
 		NodeTypes: wall, turret
+	Replaceable:
+		Types: GDIGate, GDITower
+
+GAGATE_A:
+	Inherits: ^Gate_A
+	Buildable:
+		Queue: Defense
+		BuildPaletteOrder: 30
+		Prerequisites: gapile, ~structures.gdi, ~techlevel.low
+	Tooltip:
+		Name: GDI Gate
+	Replacement:
+		ReplaceableTypes: GDIGate
+
+GAGATE_B:
+	Inherits: ^Gate_B
+	Buildable:
+		Queue: Defense
+		BuildPaletteOrder: 50
+		Prerequisites: gapile, ~structures.gdi, ~techlevel.low
+	Tooltip:
+		Name: GDI Gate
+	Replacement:
+		ReplaceableTypes: GDIGate
 
 GACTWR:
 	Inherits: ^Defense
+	Inherits@IDISABLE: ^DisableOnPowerDown
+	Inherits@AUTOTARGET: ^AutoTargetAll
 	-WithSpriteBody:
 	WithWallSpriteBody:
 		Type: wall
 	Valued:
-		Cost: 600
+		Cost: 200
 	Tooltip:
 		Name: Component Tower
-		Description: Modular tower for base defenses.
 	Buildable:
 		Queue: Defense
-		BuildPaletteOrder: 30
-		Prerequisites: gapile, ~structures.gdi
-	Building:
+		BuildPaletteOrder: 70
+		Prerequisites: gapile, ~structures.gdi, ~techlevel.low
+		Description: Modular tower for base defenses.
 	Selectable:
 		Bounds: 48, 36, 0, -6
-	DisabledOverlay:
+		DecorationBounds: 48, 48, 0, -12
 	Health:
-		HP: 500
+		HP: 50000
 	Armor:
 		Type: Light
 	BlocksProjectiles:
@@ -52,81 +69,77 @@ GACTWR:
 	BodyOrientation:
 		QuantizedFacings: 32
 	DetectCloaked:
-		UpgradeTypes: tower
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: !empdisable && !disabled && (tower.vulcan || tower.rocket || tower.sam)
 	Turreted:
-		ROT: 10
-		InitialFacing: 50
+		TurnSpeed: 10
+		InitialFacing: 224
 	AttackTurreted:
-		UpgradeTypes: tower
-		UpgradeMinEnabledLevel: 1
-	CanPowerDown:
-		IndicatorPalette: mouse
+		RequiresCondition: !build-incomplete && (tower.vulcan || tower.rocket || tower.sam)
+		PauseOnCondition: empdisable || disabled
 	WithSpriteTurret@VULC:
-		UpgradeTypes: tower.vulcan
-		UpgradeMinEnabledLevel: 1
-		Recoils: no
+		RequiresCondition: !build-incomplete && tower.vulcan
+		Recoils: false
 		Sequence: turret-vulcan
 	WithSpriteTurret@ROCKET:
-		UpgradeTypes: tower.rocket
-		UpgradeMinEnabledLevel: 1
-		Recoils: no
+		RequiresCondition: !build-incomplete && tower.rocket
+		Recoils: false
 		Sequence: turret-rocket
 	WithSpriteTurret@SAM:
-		UpgradeTypes: tower.sam
-		UpgradeMinEnabledLevel: 1
-		Recoils: no
+		RequiresCondition: !build-incomplete && tower.sam
+		Recoils: false
 		Sequence: turret-sam
 	Armament@VULCPRIMARY:
-		UpgradeTypes: tower.vulcan
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: tower.vulcan
 		Weapon: VulcanTower
-		LocalOffset: 768,85,512
+		LocalOffset: 588,120,1358
 		MuzzleSequence: muzzle
+		MuzzlePalette: effect-ignore-lighting
 		MuzzleSplitFacings: 8
 	Armament@VULCSECONDARY:
-		UpgradeTypes: tower.vulcan
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: tower.vulcan
 		Name: secondary
 		Weapon: VulcanTower
-		LocalOffset: 768,-85,512
+		LocalOffset: 588,-120,1358
 		MuzzleSequence: muzzle
+		MuzzlePalette: effect-ignore-lighting
 		MuzzleSplitFacings: 8
 	Armament@ROCKET:
-		UpgradeTypes: tower.rocket
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: tower.rocket
 		Weapon: RPGTower
-		LocalOffset: 512,-128,512
+		LocalOffset: 272,-92,1493
 	Armament@SAM:
-		UpgradeTypes: tower.sam
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: tower.sam
 		Weapon: RedEye2
-		LocalOffset: 512,0,512
+		LocalOffset: 543,0,1697
 	WithMuzzleOverlay:
-		UpgradeTypes: tower.vulcan
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: !build-incomplete && tower.vulcan
 	WithIdleOverlay@LIGHTS:
+		RequiresCondition: !build-incomplete && !disabled
 		Sequence: idle-lights
 	LineBuildNode:
 		Types: turret
 	Power@base:
+		RequiresCondition: !disabled
 		Amount: -10
 	Power@turrets:
-		UpgradeTypes: tower
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: !disabled && (tower.vulcan || tower.rocket || tower.sam)
 		Amount: -20
 	Power@samextra:
-		UpgradeTypes: tower.sam
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: !disabled && tower.sam
 		Amount: -10
 	Pluggable:
-		Upgrades:
-			tower.vulcan: tower, tower.vulcan
-			tower.rocket: tower, tower.rocket
-			tower.sam: tower, tower.sam
+		Conditions:
+			tower.vulcan: tower.vulcan
+			tower.rocket: tower.rocket
+			tower.sam: tower.sam
+		Requirements:
+			tower.vulcan: !build-incomplete && !tower.vulcan && !tower.rocket && !tower.sam
+			tower.rocket: !build-incomplete && !tower.rocket && !tower.vulcan && !tower.sam
+			tower.sam: !build-incomplete && !tower.vulcan && !tower.rocket && !tower.sam
 	ProvidesPrerequisite@buildingname:
 	SelectionDecorations:
-		VisualBounds: 48, 48, 0, -12
+	Replacement:
+		ReplaceableTypes: GDITower
 
 GAVULC:
 	Inherits: ^BuildingPlug
@@ -134,11 +147,11 @@ GAVULC:
 		Cost: 150
 	Tooltip:
 		Name: Vulcan Tower
-		Description: Basic base defense.\nDoes not require power to operate.\n  Strong vs Infantry, Light armor\n  Weak vs Aircraft
 	Buildable:
 		Queue: Defense
-		BuildPaletteOrder: 40
-		Prerequisites: gactwr, gapile, ~structures.gdi
+		BuildPaletteOrder: 120
+		Prerequisites: gactwr, gapile, ~structures.gdi, ~techlevel.low
+		Description: Basic base defense.\nDoes not require power to operate.\n  Strong vs Infantry, Light armor\n  Weak vs Aircraft
 	Plug:
 		Type: tower.vulcan
 	Power:
@@ -150,11 +163,11 @@ GAROCK:
 		Cost: 600
 	Tooltip:
 		Name: RPG Upgrade
-		Description: GDI Advanced base defense.\nDoes not require power to operate.\n  Strong vs Armored ground units\n  Weak vs Aircraft
 	Buildable:
 		Queue: Defense
-		BuildPaletteOrder: 40
-		Prerequisites: gactwr, gapile, ~structures.gdi
+		BuildPaletteOrder: 130
+		Prerequisites: gactwr, gapile, ~structures.gdi, ~techlevel.high
+		Description: GDI Advanced base defense.\nDoes not require power to operate.\n  Strong vs Armored ground units\n  Weak vs Aircraft
 	Plug:
 		Type: tower.rocket
 	Power:
@@ -166,11 +179,11 @@ GACSAM:
 		Cost: 300
 	Tooltip:
 		Name: SAM Upgrade
-		Description: GDI Anti-Air base defense.\nDoes not require power to operate.\n  Strong vs Aircraft\n  Weak vs Ground units
 	Buildable:
 		Queue: Defense
-		BuildPaletteOrder: 40
-		Prerequisites: gactwr, garadr, ~structures.gdi
+		BuildPaletteOrder: 140
+		Prerequisites: gactwr, garadr, ~structures.gdi, ~techlevel.medium
+		Description: GDI Anti-Air base defense.\nDoes not require power to operate.\n  Strong vs Aircraft\n  Weak vs Ground units
 	Plug:
 		Type: tower.sam
 	Power:
@@ -182,11 +195,11 @@ GAPOWRUP:
 		Cost: 150
 	Tooltip:
 		Name: Power Turbine
-		Description: Provides extra power generation.
 	Buildable:
 		Queue: Defense
-		BuildPaletteOrder: 10
-		Prerequisites: gapowr, ~structures.gdi
+		BuildPaletteOrder: 80
+		Prerequisites: gapowr, ~structures.gdi, ~techlevel.medium
+		Description: Provides extra power generation.
 	Plug:
 		Type: powrup
 	Power:
@@ -198,11 +211,11 @@ GAPLUG2:
 		Cost: 1000
 	Tooltip:
 		Name: Seeker Control
-		Description: Enables use of the hunter-seeker droid.
 	Buildable:
 		Queue: Defense
-		BuildPaletteOrder: 1000
-		Prerequisites: gaplug, gatech, gaweap, ~structures.gdi
+		BuildPaletteOrder: 170
+		Prerequisites: gaplug, gatech, gaweap, ~structures.gdi, ~techlevel.superweapons
+		Description: Enables use of the hunter-seeker droid.
 	Plug:
 		Type: plug.hunterseeker
 	Power:
@@ -214,13 +227,12 @@ GAPLUG3:
 		Cost: 1500
 	Tooltip:
 		Name: Ion Cannon Uplink
-		Description: Enables use of the Ion Cannon.
 	Buildable:
 		Queue: Defense
-		BuildPaletteOrder: 1000
-		Prerequisites: gaplug, gatech, ~structures.gdi
+		BuildPaletteOrder: 180
+		Prerequisites: gaplug, gatech, ~structures.gdi, ~techlevel.superweapons
+		Description: Enables use of the Ion Cannon.
 	Plug:
 		Type: plug.ioncannon
 	Power:
 		Amount: -100
-

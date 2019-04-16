@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -16,9 +17,9 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Orders
 {
-	public class RepairOrderGenerator : IOrderGenerator
+	public class RepairOrderGenerator : OrderGenerator
 	{
-		public IEnumerable<Order> Order(World world, CPos xy, MouseInput mi)
+		protected override IEnumerable<Order> OrderInner(World world, CPos cell, int2 worldPixel, MouseInput mi)
 		{
 			if (mi.Button == MouseButton.Right)
 				world.CancelInputMode();
@@ -31,7 +32,8 @@ namespace OpenRA.Mods.Common.Orders
 			if (mi.Button != MouseButton.Left)
 				yield break;
 
-			var underCursor = world.ScreenMap.ActorsAt(mi)
+			var underCursor = world.ScreenMap.ActorsAtMouse(mi)
+				.Select(a => a.Actor)
 				.FirstOrDefault(a => a.AppearsFriendlyTo(world.LocalPlayer.PlayerActor) && !world.FogObscures(a));
 
 			if (underCursor == null)
@@ -42,32 +44,46 @@ namespace OpenRA.Mods.Common.Orders
 
 			// Repair a building.
 			if (underCursor.Info.HasTraitInfo<RepairableBuildingInfo>())
-				yield return new Order("RepairBuilding", world.LocalPlayer.PlayerActor, false) { TargetActor = underCursor };
+				yield return new Order("RepairBuilding", world.LocalPlayer.PlayerActor, Target.FromActor(underCursor), false);
+
+			// Don't command allied units
+			if (underCursor.Owner != world.LocalPlayer)
+				yield break;
+
+			Actor repairBuilding = null;
+			var orderId = "Repair";
 
 			// Test for generic Repairable (used on units).
 			var repairable = underCursor.TraitOrDefault<Repairable>();
-			if (repairable == null)
-				yield break;
+			if (repairable != null)
+				repairBuilding = repairable.FindRepairBuilding(underCursor);
+			else
+			{
+				var repairableNear = underCursor.TraitOrDefault<RepairableNear>();
+				if (repairableNear != null)
+				{
+					orderId = "RepairNear";
+					repairBuilding = repairableNear.FindRepairBuilding(underCursor);
+				}
+			}
 
-			// Find a building to repair at.
-			var repairBuilding = repairable.FindRepairBuilding(underCursor);
 			if (repairBuilding == null)
 				yield break;
 
-			yield return new Order("Repair", underCursor, false) { TargetActor = repairBuilding };
+			yield return new Order(orderId, underCursor, Target.FromActor(repairBuilding), false) { VisualFeedbackTarget = Target.FromActor(underCursor) };
 		}
 
-		public void Tick(World world)
+		protected override void Tick(World world)
 		{
 			if (world.LocalPlayer != null &&
 				world.LocalPlayer.WinState != WinState.Undefined)
 				world.CancelInputMode();
 		}
 
-		public IEnumerable<IRenderable> Render(WorldRenderer wr, World world) { yield break; }
-		public IEnumerable<IRenderable> RenderAfterWorld(WorldRenderer wr, World world) { yield break; }
+		protected override IEnumerable<IRenderable> Render(WorldRenderer wr, World world) { yield break; }
+		protected override IEnumerable<IRenderable> RenderAboveShroud(WorldRenderer wr, World world) { yield break; }
 
-		public string GetCursor(World world, CPos xy, MouseInput mi)
+		protected override string GetCursor(World world, CPos cell, int2 worldPixel, MouseInput mi)
 		{
 			mi.Button = MouseButton.Left;
 			return OrderInner(world, mi).Any()

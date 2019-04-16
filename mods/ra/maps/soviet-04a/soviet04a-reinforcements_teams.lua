@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 Civs = { civ1, civ2, civ3 }
 Village = { civ1, civ2, civ3, village1, village2, village5 }
 SovietMCV = { "mcv" }
@@ -18,7 +26,7 @@ Patrol2Path = { BridgeEntrancePoint.Location, NERoadTurnPoint.Location, Crossroa
 
 VillageCamArea = { CPos.New(68, 75),CPos.New(68, 76),CPos.New(68, 77),CPos.New(68, 78),CPos.New(68, 79), CPos.New(68, 80), CPos.New(68, 81), CPos.New(68, 82) }
 
-if Map.Difficulty == "Easy" then
+if Map.LobbyOption("difficulty") == "easy" then
 	ArmorReinfGreece = { "jeep", "1tnk", "1tnk" }
 else
 	ArmorReinfGreece = { "jeep", "jeep", "1tnk", "1tnk", "1tnk" }
@@ -31,7 +39,7 @@ AttackPaths =
 }
 
 ReinfInf = function()
-	if Radar.IsDead or Radar.Owner ~= Greece then
+	if RadarDome.IsDead or RadarDome.Owner ~= Greece then
 		return
 	end
 
@@ -41,7 +49,7 @@ ReinfInf = function()
 end
 
 ReinfArmor = function()
-	if not Radar.IsDead and Radar.Owner == Greece then
+	if not RadarDome.IsDead and RadarDome.Owner == Greece then
 		RCheck = true
 		Reinforcements.Reinforce(Greece, ArmorReinfGreece, ArmorReinfPath, 0, function(soldier)
 			soldier.Hunt()
@@ -50,7 +58,7 @@ ReinfArmor = function()
 end
 
 BringPatrol1 = function()
-	if Radar.IsDead or Radar.Owner ~= Greece then
+	if RadarDome.IsDead or RadarDome.Owner ~= Greece then
 		return
 	end
 
@@ -60,7 +68,7 @@ BringPatrol1 = function()
 	end)
 
 	Trigger.OnAllKilled(units, function()
-		if Map.Difficulty == "Hard" then
+		if Map.LobbyOption("difficulty") == "hard" then
 			Trigger.AfterDelay(DateTime.Minutes(4), BringPatrol1)
 		else
 			Trigger.AfterDelay(DateTime.Minutes(7), BringPatrol1)
@@ -69,7 +77,7 @@ BringPatrol1 = function()
 end
 
 BringPatrol2 = function()
-	if Radar.IsDead or Radar.Owner ~= Greece then
+	if RadarDome.IsDead or RadarDome.Owner ~= Greece then
 		return
 	end
 
@@ -79,7 +87,7 @@ BringPatrol2 = function()
 	end)
 
 	Trigger.OnAllKilled(units, function()
-		if Map.Difficulty == "Hard" then
+		if Map.LobbyOption("difficulty") == "hard" then
 			Trigger.AfterDelay(DateTime.Minutes(4), BringPatrol2)
 		else
 			Trigger.AfterDelay(DateTime.Minutes(7), BringPatrol2)

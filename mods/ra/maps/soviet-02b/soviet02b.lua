@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 IntroAttackers = { IntroSoldier1, IntroSoldier2, IntroSoldier3 }
 
 BridgeShroudTrigger = { CPos.New(63, 71), CPos.New(64, 71), CPos.New(65, 71), CPos.New(69, 65), CPos.New(70, 65), CPos.New(71, 65) }
@@ -27,7 +35,7 @@ Trigger.OnEnteredFootprint(BridgeShroudTrigger, function(a, id)
 		bridgeShroudTrigger = true
 		local cameraBridge = Actor.Create("camera", true, { Owner = player, Location = CameraBridge.Location })
 		Trigger.AfterDelay(DateTime.Seconds(15), function()
-			cameraBridge.Kill()
+			cameraBridge.Destroy()
 		end)
 	end
 end)
@@ -46,7 +54,7 @@ Trigger.OnEnteredFootprint(EnemyBaseEntranceShroudTrigger, function(a, id)
 		enemyBaseEntranceShroudTrigger = true
 		local cameraBaseEntrance = Actor.Create("camera", true, { Owner = player, Location = CameraBaseEntrance.Location })
 		Trigger.AfterDelay(DateTime.Seconds(15), function()
-			cameraBaseEntrance.Kill()
+			cameraBaseEntrance.Destroy()
 		end)
 	end
 end)
@@ -57,8 +65,8 @@ Trigger.OnEnteredFootprint(EnemyBaseShroudTrigger, function(a, id)
 		local cameraBase1 = Actor.Create("camera", true, { Owner = player, Location = CameraBase1.Location })
 		local cameraBase2 = Actor.Create("camera", true, { Owner = player, Location = CameraBase2.Location })
 		Trigger.AfterDelay(DateTime.Seconds(15), function()
-			cameraBase1.Kill()
-			cameraBase2.Kill()
+			cameraBase1.Destroy()
+			cameraBase2.Destroy()
 		end)
 	end
 end)
@@ -115,20 +123,20 @@ end)
 Trigger.OnKilled(IntroSoldier1, function()
 	local cameraIntro = Actor.Create("camera", true, { Owner = player, Location = CameraStart.Location })
 	Trigger.AfterDelay(DateTime.Seconds(15), function()
-		cameraIntro.Kill()
+		cameraIntro.Destroy()
 	end)
 end)
 
 WorldLoaded = function()
 	player = Player.GetPlayer("USSR")
-	enemy = Player.GetPlayer("Germany")
+	enemy = Player.GetPlayer("Greece")
 	Utils.Do(IntroAttackers, function(actor)
 		if not actor.IsDead then
 			Trigger.OnIdle(actor, actor.Hunt)
 		end
 	end)
 	Trigger.AfterDelay(0, function()
-		local buildings = Map.ActorsInBox(Map.TopLeft, Map.BottomRight, function(self) return self.Owner == enemy and self.HasProperty("StartBuildingRepairs") end)
+		local buildings = Utils.Where(Map.ActorsInWorld, function(self) return self.Owner == enemy and self.HasProperty("StartBuildingRepairs") end)
 		Utils.Do(buildings, function(actor)
 			Trigger.OnDamaged(actor, function(building, attacker)
 				if building.Owner == enemy and building.Health < building.MaxHealth * 0.8 then

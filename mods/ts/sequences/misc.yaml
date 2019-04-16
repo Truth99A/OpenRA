@@ -1,6 +1,7 @@
 overlay:
 	Defaults: place
-		Offset: 0, -12
+		Offset: 0, -12, 1
+		ZRamp: 1
 	build-valid-snow:
 	build-valid-temperate:
 	build-invalid:
@@ -9,7 +10,8 @@ overlay:
 
 editor-overlay:
 	Defaults: place
-		Offset: 0, -12
+		Offset: 0, -12, 1
+		ZRamp: 1
 	copy:
 	paste:
 		Start: 1
@@ -18,35 +20,37 @@ poweroff:
 	offline:
 		Length: *
 		Tick: 160
+		ZOffset: 2047
 
 allyrepair:
 	repair: wrench
 		Length: *
 		Tick: 160
+		ZOffset: 2047
 
 rallypoint:
 	flag: mouse
 		Start: 221
 		Length: 8
+		ZOffset: 3072
 	circles: null
 
 beacon:
-	arrow: mouse
-		Start: 6
-		Offset: 1,-12
-	circles: ring
-		Length: 12
-		BlendMode: Additive
+	idle:
+		Length: 5
+		Tick: 200
+		ZOffset: 2047
 
 crate:
 	idle:
 		ShadowStart: 1
 		UseTilesetExtension: true
-		Offset: 0, -10
+		Offset: 0, -10, 10
 
 crate-effects:
 	Defaults:
 		Length: *
+		Offset: 0, 0, 96
 	dollar: money
 	reveal-map: reveal
 	hide-map: shroudx
@@ -58,21 +62,29 @@ crate-effects:
 	levelup: veteran
 
 rank:
-	rank: pips
+	veteran: pips
 		Start: 7
-		Length: 2
+	elite: pips
+		Start: 8
+		Offset: 3, 3
 
 mpspawn:
 	idle:
 		Length: *
+		ZRamp: 1
+		Offset: 0, 0, 24
 
 waypoint:
 	idle:
 		Length: *
+		ZRamp: 1
+		Offset: 0, 0, 24
 
 camera:
 	idle:
 		Length: *
+		ZRamp: 1
+		Offset: 0, 0, 24
 
 clock:
 	idle: gclock2
@@ -83,13 +95,8 @@ darken:
 		Length: 1
 
 pips:
-	medic: 
+	medic:
 		Start: 6
-	groups: pipsra #TODO: backfall to RA asset
-		Start: 8
-		Length: 10
-	tag-primary: pipsra #TODO: backfall to RA asset
-		Start: 2
 	pip-empty: pips2
 	pip-green: pips2
 		Start: 1
@@ -107,7 +114,9 @@ pips:
 	pip-disguise: pip-disguise
 		Length: *
 		Tick: 300
-# TODO:
+		Offset: 0, -6
+
+	# TODO:
 	pip-empty-building:
 	pip-green-building:
 		Start: 1
@@ -123,22 +132,53 @@ pips:
 explosion:
 	Defaults:
 		Length: *
+		ZOffset: 511
+		Offset: 0, 0, 24
 	building: twlt070
+		Offset: 0, 0, 36
 	ionring: ring1
-		BlendMode: Additive
-		Tick: 120
+		ZRamp: 1
+		Tick: 100
+	ionbeam: ionbeam
+		Offset: 0, -60, 60
+		ZRamp: 1
+		Tick: 100
+	ionbeam2: ionbeam
+		Offset: 0, -180, 60
+		ZRamp: 1
+		Tick: 100
+	ionbeam3: ionbeam
+		Offset: 0, -300, 60
+		ZRamp: 1
+		Tick: 100
+	ionbeam4: ionbeam
+		Offset: 0, -420, 60
+		ZRamp: 1
+		Tick: 100
+	ionbeam5: ionbeam
+		Offset: 0, -540, 60
+		ZRamp: 1
+		Tick: 100
+	ionbeam6: ionbeam
+		Offset: 0, -660, 60
+		ZRamp: 1
+		Tick: 100
 	pulse_explosion: pulsefx2
 		BlendMode: Additive
+		ZRamp: 1
 		Tick: 80
 	small_watersplash: h2o_exp2
 	large_watersplash: h2o_exp1
+		Offset: 0, 0, 39
 	water_piff: w_piff
 	water_piffs: w_piffs
 	piff: piff
 	piffs: piffpiff
 	small_explosion: explosml
 	medium_explosion: explomed
+		Offset: 0, 0, 27
 	large_explosion: explolrg
+		Offset: 0, 0, 31
 	tiny_bang: s_bang16
 	small_bang: s_bang24
 	medium_bang: s_bang34
@@ -147,20 +187,26 @@ explosion:
 	small_brnl: s_brnl30
 	medium_brnl: s_brnl40
 	large_brnl: s_brnl58
+		Offset: 0, 0, 30
 	tiny_tumu: s_tumu22
 	small_tumu: s_tumu30
 	medium_tumu: s_tumu42
 	large_tumu: s_tumu60
+		Offset: 0, 0, 31
 	tiny_clsn: s_clsn16
 	small_clsn: s_clsn22
 	medium_clsn: s_clsn30
 	large_clsn: s_clsn42
 	verylarge_clsn: s_clsn58
+		Offset: 0, 0, 30
 	tiny_twlt: twlt026
 	small_twlt: twlt036
 	medium_twlt: twlt050
+		Offset: 0, 0, 26
 	large_twlt: twlt070
+		Offset: 0, 0, 36
 	verylarge_twlt: twlt100
+		Offset: 0, 0, 51
 	tiny_grey_explosion: xgrysml1
 	small_grey_explosion: xgrysml2
 	medium_grey_explosion: xgrymed1
@@ -169,92 +215,122 @@ explosion:
 discus:
 	idle:
 		Length: *
+		ZOffset: 1023
+		Offset: 0, 0, 12
 
 canister:
 	idle:
 		Length: *
+		ZOffset: 1023
+		Offset: 0, 0, 12
 
 pulsball:
 	idle:
 		Length: *
 		BlendMode: Additive
+		ZOffset: 1023
+		Offset: 0, 0, 24
 
 dragon:
 	idle:
 		Facings: 32
+		ZOffset: 1023
+		Offset: 0, 0, 6
 
 crystal4:
 	idle:
 		Length: 15
 		ShadowStart: 15
 		UseTilesetExtension: true
+		ZOffset: 1023
+		Offset: 0, 0, 6
 
 120mm:
 	idle:
+		ZOffset: 1023
+		Offset: 0, 0, 4
 
 torpedo:
 	idle:
 		Length: *
+		ZOffset: 1023
+		Offset: 0, 0, 8
 
 flameall:
 	idle:
 		Length: 19
 		Facings: -8
 		Tick: 160
+		ZOffset: 1023
+		Offset: 0, 0, 24
 
 largesmoke:
 	idle: lgrysmk1
 		Length: *
+		ZOffset: 1023
+		Offset: 0, 0, 24
 
 smallsmoke:
 	idle: sgrysmk1
 		Length: *
+		ZOffset: 1023
+		Offset: 0, 0, 24
 
 large_smoke_trail:
 	idle: smokey
 		Length: *
+		ZOffset: 1023
+		Offset: 0, 0, 24
 
 small_smoke_trail:
 	idle: smokey2
 		Length: *
+		ZOffset: 1023
+		Offset: 0, 0, 24
 
 largefire:
 	idle: fire1
 		Length: *
+		Offset: 0, 0, 36
 
 mediumfire:
 	idle: fire2
 		Length: *
+		Offset: 0, 0, 24
 
 smallfire:
 	idle: fire3
 		Length: *
+		Offset: 0, 0, 24
 
 tinyfire:
 	idle: fire4
 		Length: *
+		Offset: 0, 0, 24
 
 moveflsh:
 	idle: ring
 		Length: *
 		Tick: 30
+		ZOffset: 2047
+		Offset: 0, 0, 48
+		ZRamp: 1
 
 wake:
 	idle: wake2
 		Length: *
 		Tick: 180
-
-emp:
-	idle: emp_fx01
-		Length: *
-		BlendMode: Additive
+		ZOffset: -512
+		ZRamp: 1
+		Offset: 0, 0, 1
 
 resources:
 	Defaults:
 		UseTilesetExtension: true
 		Length: 12
 		ShadowStart: 12
-		Offset: 0, -12
+		Offset: 0, -12, 1.5
+		ZRamp: 1
 	tib01: tib01
 	tib02: tib02
 	tib03: tib03
@@ -267,22 +343,32 @@ resources:
 	tib10: tib10
 	tib11: tib11
 	tib12: tib12
-	tib13: tib13
-	tib14: tib14
-	tib15: tib15
-	tib16: tib16
-	tib17: tib17
-	tib18: tib18
-	tib19: tib19
-	tib20: tib20
+	tib13: tib13 # TODO: NW ramp variant, currently unused
+	tib14: tib14 # TODO: NW ramp variant, currently unused
+	tib15: tib15 # TODO: NE ramp variant, currently unused
+	tib16: tib16 # TODO: NE ramp variant, currently unused
+	tib17: tib17 # TODO: SE ramp variant, currently unused
+	tib18: tib18 # TODO: SE ramp variant, currently unused
+	tib19: tib19 # TODO: SW ramp variant, currently unused
+	tib20: tib20 # TODO: SW ramp variant, currently unused
 	veins: veins
 		Length: 1
 		Start: 52
 		ShadowStart: -1
+		Tick: 180
+		Offset: 0, -12, 2.5
+
+veins:
+	idle: veinatac
+		Length: 12
+		UseTilesetExtension: true
+		ZOffset: 1023
+		Offset: 0, -12, 24
 
 shroud:
 	Defaults:
 		Offset: 0, -1
+		ZRamp: 1
 	shroud:
 		Length: *
 	fog: fog
@@ -291,7 +377,8 @@ shroud:
 smallscorches:
 	Defaults:
 		UseTilesetExtension: true
-		Offset: 0, -12
+		Offset: 0, -12, 1
+		ZRamp: 1
 	sc1: burnt01
 	sc2: burnt02
 	sc3: burnt03
@@ -302,7 +389,8 @@ smallscorches:
 mediumscorches:
 	Defaults:
 		UseTilesetExtension: true
-		Offset: 0, -18
+		Offset: 0, -18, 1
+		ZRamp: 1
 	sc7: burnt07
 	sc8: burnt08
 	sc9: burnt09
@@ -311,14 +399,16 @@ mediumscorches:
 largescorches:
 	Defaults:
 		UseTilesetExtension: true
-		Offset: 0, -24
+		Offset: 0, -24, 1
+		ZRamp: 1
 	sc11: burnt11
 	sc12: burnt12
 
 smallcraters:
 	Defaults:
 		UseTilesetExtension: true
-		Offset: 0, -12
+		Offset: 0, -12, 1
+		ZRamp: 1
 	cr1: crater01
 	cr2: crater02
 	cr3: crater03
@@ -329,7 +419,8 @@ smallcraters:
 mediumcraters:
 	Defaults:
 		UseTilesetExtension: true
-		Offset: 0, -12
+		Offset: 0, -12, 1
+		ZRamp: 1
 	cr7: crater07
 	cr8: crater08
 	cr9: crater09
@@ -338,7 +429,8 @@ mediumcraters:
 largecraters:
 	Defaults:
 		UseTilesetExtension: true
-		Offset: 0, -24
+		Offset: 0, -24, 1
+		ZRamp: 1
 	cr11: crater11
 	cr12: crater12
 
@@ -346,261 +438,208 @@ icon:
 	clustermissile: mltiicon
 	ioncannon: ioncicon
 	hunterseeker: detnicon
+	emp: pulsicon
 
 clustermissile:
-	up: null # TODO
-		Length: *
-	down: null # TODO
-		Length: *
-ionbeam:
+	up: mltimisl-placeholder # TODO: use voxel
+		Frames: 0
+		Length: 1
+	down: mltimisl-placeholder # TODO: use voxel
+		Frames: 1
+		Length: 1
+
+^rock:
 	idle:
-		Length: *
-		Offset: 0, -78
-		ZOffset: 1
+		ShadowStart: 1
+		UseTilesetExtension: true
+		Offset: 0, -12
 
 trock01:
-	idle:
-		ShadowStart: 1
-		UseTilesetExtension: true
-		Offset: 0, -12
+	Inherits: ^rock
 
 trock02:
-	idle:
-		ShadowStart: 1
-		UseTilesetExtension: true
-		Offset: 0, -12
+	Inherits: ^rock
 
 trock03:
-	idle:
-		ShadowStart: 1
-		UseTilesetExtension: true
-		Offset: 0, -12
+	Inherits: ^rock
 
 trock04:
-	idle:
-		ShadowStart: 1
-		UseTilesetExtension: true
-		Offset: 0, -12
+	Inherits: ^rock
 
 trock05:
-	idle:
-		ShadowStart: 1
-		UseTilesetExtension: true
-		Offset: 0, -12
+	Inherits: ^rock
 
 srock01:
-	idle:
-		ShadowStart: 1
-		UseTilesetExtension: true
-		Offset: 0, -12
+	Inherits: ^rock
 
 srock02:
-	idle:
-		ShadowStart: 1
-		UseTilesetExtension: true
-		Offset: 0, -12
+	Inherits: ^rock
 
 srock03:
-	idle:
-		ShadowStart: 1
-		UseTilesetExtension: true
-		Offset: 0, -12
+	Inherits: ^rock
 
 srock04:
-	idle:
-		ShadowStart: 1
-		UseTilesetExtension: true
-		Offset: 0, -12
+	Inherits: ^rock
 
 srock05:
-	idle:
-		ShadowStart: 1
-		UseTilesetExtension: true
-		Offset: 0, -12
+	Inherits: ^rock
 
 dbrissm:
+	Defaults:
+		ZOffset: 1023
+		Length: *
 	1: dbris1sm
-		Length:*
 	2: dbris2sm
-		Length:*
 	3: dbris3sm
-		Length:*
 	4: dbris4sm
-		Length:*
 	5: dbris5sm
-		Length:*
 	6: dbris6sm
-		Length:*
 	7: dbris7sm
-		Length:*
 	8: dbris8sm
-		Length:*
 	9: dbris9sm
-		Length:*
 	10: dbrs10sm
-		Length:*
 
 dbrislg:
+	Defaults:
+		ZOffset: 1023
+		Length: *
 	1: dbris1lg
-		Length:*
 	2: dbris2lg
-		Length:*
 	3: dbris3lg
-		Length:*
 	4: dbris4lg
-		Length:*
 	5: dbris5lg
-		Length:*
 	6: dbris6lg
-		Length:*
 	7: dbris7lg
-		Length:*
 	8: dbris8lg
-		Length:*
 	9: dbris9lg
-		Length:*
 	10: dbrs10lg
-		Length:*
+
+^crate:
+	idle:
+		Offset: 0, 0, 12
+		DepthSprite: isodepth.shp
 
 crat01:
-	idle:
+	Inherits: ^crate
 
 crat02:
-	idle:
+	Inherits: ^crate
 
 crat03:
-	idle:
+	Inherits: ^crate
 
 crat04:
-	idle:
+	Inherits: ^crate
 
 crat0a:
-	idle:
+	Inherits: ^crate
 
 crat0b:
-	idle:
+	Inherits: ^crate
 
 crat0c:
-	idle:
+	Inherits: ^crate
 
 drum01:
-	idle:
+	Inherits: ^crate
 
 drum02:
-	idle:
+	Inherits: ^crate
 
 palet01:
-	idle:
+	Inherits: ^crate
 
 palet02:
-	idle:
+	Inherits: ^crate
 
 palet03:
-	idle:
+	Inherits: ^crate
 
 palet04:
+	Inherits: ^crate
+
+^tracks:
 	idle:
+		UseTilesetExtension: true
+		ZOffset: -1c0
+		Offset: 0, 0, 1
+		ZRamp: 1
 
 tracks01:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks02:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks03:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks04:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks05:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks06:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks07:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks08:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks09:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks10:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks11:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks12:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks13:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks14:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks15:
-	idle:
-		UseTilesetExtension: true
-		ZOffset: -1c0
+	Inherits: ^tracks
 
 tracks16:
+	Inherits: ^tracks
+
+^tuntop:
 	idle:
+		ZRamp: 1
 		UseTilesetExtension: true
-		ZOffset: -1c0
 
 tuntop01:
+	Inherits: ^tuntop
 	idle:
-		Offset: 0, -13
-		UseTilesetExtension: true
-		ShadowStart: 1
+		Offset: 24, -49, 36
 
 tuntop02:
+	Inherits: ^tuntop
 	idle:
-		Offset: 0, -13
-		UseTilesetExtension: true
-		ShadowStart: 1
+		Offset: -24, -49, 36
 
 tuntop03:
+	Inherits: ^tuntop
 	idle:
-		Offset: 0, -13
-		UseTilesetExtension: true
-		ShadowStart: 1
+		Offset: 24, -49, 24
 
 tuntop04:
+	Inherits: ^tuntop
 	idle:
-		Offset: 0, -13
-		UseTilesetExtension: true
-		ShadowStart: 1
+		Offset: -24, -49, 24
+
+dig:
+	idle:
+		Length: *
+		ZOffset: 511
+		Offset: 0, 0, 24

@@ -1,3 +1,11 @@
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
 ProductionUnits = { "e1", "e1", "e2" }
 ProductionBuildings = { USSRBarracks1, USSRBarracks2, USSRBarracks3 }
 FirstUSSRBase = { USSRFlameTower1, USSRFlameTower2, USSRFlameTower3, USSRBarracks1, PGuard1, PGuard2, PGuard3, PGuard4, PGuard5 }
@@ -20,11 +28,10 @@ GuardTanks = { Heavy1, Heavy2, Heavy3 }
 CheckpointGuards = { USSRCheckpointGuard1, USSRCheckpointGuard2 }
 CheckpointGuardWaypoints = { CheckpointGuardWaypoint1, CheckpointGuardWaypoint2 }
 
-if Map.Difficulty == "Easy" then
+if Map.LobbyOption("difficulty") == "easy" then
 	TanyaType = "e7"
 else
 	TanyaType = "e7.noautotarget"
-	ChangeStance = true
 end
 
 IdleHunt = function(actor)
@@ -63,8 +70,7 @@ end
 SetupAlliedUnits = function()
 	Tanya = Actor.Create(TanyaType, true, { Owner = player, Location = TanyaWaypoint.Location, Facing = 128 })
 
-	if ChangeStance then
-		Tanya.Stance = "HoldFire"
+	if TanyaType == "e7.noautotarget" then
 		Trigger.AfterDelay(DateTime.Seconds(2), function()
 			Media.DisplayMessage("According to the rules of engagement I need your explicit orders to fire, Commander!", "Tanya")
 		end)
@@ -215,6 +221,10 @@ InitTriggers = function()
 	end)
 
 	Trigger.OnKilled(ExplosiveBarrel, function()
+		if reinforcementsTriggered then
+			return
+		end
+
 		if not ExplodingBridge.IsDead then ExplodingBridge.Kill() end
 		reinforcementsTriggered = true
 		Trigger.AfterDelay(DateTime.Seconds(1), SendUSSRTankReinforcements)
@@ -242,8 +252,10 @@ InitTriggers = function()
 			AlertFirstBase()
 		end)
 	end)
-	Trigger.OnAllRemovedFromWorld(FirstUSSRBase, function() -- The camera can remain when one building is captured
-		if baseCamera then baseCamera.Destroy() end
+	Trigger.OnAllRemovedFromWorld(FirstUSSRBase, function()
+		if baseCamera then
+			baseCamera.Destroy()
+		end
 	end)
 
 	Trigger.OnDamaged(USSRBarracks3, function()
@@ -347,14 +359,26 @@ InitTriggers = function()
 		end
 	end)
 
+	-- The engineers need to leave the enemy base to count as 'freed'
+	Trigger.OnExitedProximityTrigger(BaseCameraWaypoint.CenterPosition, WDist.New(7 * 1024), function(a, id)
+		if a.Type == "e6" and not EngisFreed then
+			EngisFreed = true
+			Trigger.RemoveProximityTrigger(id)
+		end
+	end)
+
 	Trigger.AfterDelay(0, function()
-		local bridges = Map.ActorsInBox(Map.TopLeft, Map.BottomRight, function(self) return self.Type == "bridge1" or self.Type == "bridge2" end)
+		local bridges = Utils.Where(Map.ActorsInWorld, function(actor) return actor.Type == "bridge1" or actor.Type == "bridge2" end)
 		ExplodingBridge = bridges[1]
 
 		Trigger.OnAllKilled(bridges, function()
 			player.MarkCompletedObjective(KillBridges)
 			player.MarkCompletedObjective(TanyaSurvive)
-			player.MarkCompletedObjective(FreePrisoners)
+
+			-- The medic is freed once his guard is dead
+			if MediFreed and MediGuard.IsDead and EngisFreed then
+				player.MarkCompletedObjective(FreePrisoners)
+			end
 		end)
 	end)
 end

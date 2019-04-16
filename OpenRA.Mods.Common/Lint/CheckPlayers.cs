@@ -1,25 +1,30 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
+using OpenRA.Scripting;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Lint
 {
 	public class CheckPlayers : ILintMapPass
 	{
-		public void Run(Action<string> emitError, Action<string> emitWarning, Map map)
+		public void Run(Action<string> emitError, Action<string> emitWarning, ModData modData, Map map)
 		{
 			var players = new MapPlayers(map.PlayerDefinitions).Players;
+			var worldOwnerFound = false;
 
 			var playerNames = players.Values.Select(p => p.Name).ToHashSet();
 			foreach (var player in players.Values)
@@ -32,9 +37,19 @@ namespace OpenRA.Mods.Common.Lint
 					if (!playerNames.Contains(enemy))
 						emitError("Enemies contains player {0} that is not in list.".F(enemy));
 
-				if (player.OwnsWorld && (player.Enemies.Any() || player.Allies.Any()))
-					emitWarning("The player {0} owning the world should not have any allies or enemies.".F(player.Name));
+				if (player.OwnsWorld)
+				{
+					worldOwnerFound = true;
+					if (player.Enemies.Any() || player.Allies.Any())
+						emitWarning("The player {0} owning the world should not have any allies or enemies.".F(player.Name));
+
+					if (player.Playable)
+						emitError("The player {0} owning the world can't be playable.".F(player.Name));
+				}
 			}
+
+			if (!worldOwnerFound)
+				emitError("Found no player owning the world.");
 
 			var worldActor = map.Rules.Actors["world"];
 
@@ -45,16 +60,25 @@ namespace OpenRA.Mods.Common.Lint
 
 			if (worldActor.HasTraitInfo<MPStartLocationsInfo>())
 			{
-				var multiPlayers = players.Count(p => p.Value.Playable);
-				var spawns = map.ActorDefinitions.Where(a => a.Value.Value == "mpspawn");
-				var spawnCount = spawns.Count();
+				var playerCount = players.Count(p => p.Value.Playable);
+				var spawns = new List<CPos>();
+				foreach (var kv in map.ActorDefinitions.Where(d => d.Value.Value == "mpspawn"))
+				{
+					var s = new ActorReference(kv.Value.Value, kv.Value.ToDictionary());
+					spawns.Add(s.InitDict.Get<LocationInit>().Value(null));
+				}
 
-				if (multiPlayers > spawnCount)
-					emitError("The map allows {0} possible players, but defines only {1} spawn points".F(multiPlayers, spawnCount));
+				if (playerCount > spawns.Count)
+					emitError("The map allows {0} possible players, but defines only {1} spawn points".F(playerCount, spawns.Count));
 
-				if (map.SpawnPoints.Value.Distinct().Count() != spawnCount)
+				if (spawns.Distinct().Count() != spawns.Count)
 					emitError("Duplicate spawn point locations detected.");
 			}
+
+			// Check for actors that require specific owners
+			var actorsWithRequiredOwner = map.Rules.Actors
+				.Where(a => a.Value.HasTraitInfo<RequiresSpecificOwnersInfo>())
+				.ToDictionary(a => a.Key, a => a.Value.TraitInfo<RequiresSpecificOwnersInfo>());
 
 			foreach (var kv in map.ActorDefinitions)
 			{
@@ -66,7 +90,12 @@ namespace OpenRA.Mods.Common.Lint
 				{
 					var ownerName = ownerInit.PlayerName;
 					if (!playerNames.Contains(ownerName))
-						emitError("Actor {0} is owned by unknown player {1}.".F(actorReference.Type, ownerName));
+						emitError("Actor {0} is owned by unknown player {1}.".F(kv.Key, ownerName));
+
+					RequiresSpecificOwnersInfo info;
+					if (actorsWithRequiredOwner.TryGetValue(kv.Value.Value, out info))
+						if (!info.ValidOwnerNames.Contains(ownerName))
+							emitError("Actor {0} owner {1} is not one of ValidOwnerNames: {2}".F(kv.Key, ownerName, info.ValidOwnerNames.JoinWith(", ")));
 				}
 			}
 		}

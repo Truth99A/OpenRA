@@ -1,23 +1,25 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Traits;
 
-namespace OpenRA.Mods.Common.Traits
+namespace OpenRA.Mods.Common.Traits.Render
 {
 	[Desc("Renders barrels for units with the Turreted trait.")]
-	public class WithSpriteBarrelInfo : UpgradableTraitInfo, IRenderActorPreviewSpritesInfo, Requires<TurretedInfo>,
+	public class WithSpriteBarrelInfo : ConditionalTraitInfo, IRenderActorPreviewSpritesInfo, Requires<TurretedInfo>,
 		Requires<ArmamentInfo>, Requires<RenderSpritesInfo>, Requires<BodyOrientationInfo>
 	{
 		[Desc("Sequence name to use.")]
@@ -33,7 +35,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public IEnumerable<IActorPreview> RenderPreviewSprites(ActorPreviewInitializer init, RenderSpritesInfo rs, string image, int facings, PaletteReference p)
 		{
-			if (UpgradeMinEnabledLevel > 0)
+			if (!EnabledByDefault)
 				yield break;
 
 			var body = init.Actor.TraitInfo<BodyOrientationInfo>();
@@ -42,17 +44,24 @@ namespace OpenRA.Mods.Common.Traits
 			var t = init.Actor.TraitInfos<TurretedInfo>()
 				.First(tt => tt.Turret == armament.Turret);
 
-			var anim = new Animation(init.World, image, () => t.InitialFacing);
+			var turretFacing = Turreted.TurretFacingFromInit(init, t.InitialFacing, armament.Turret);
+			var anim = new Animation(init.World, image, turretFacing);
 			anim.Play(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence));
 
-			var turretOrientation = body.QuantizeOrientation(new WRot(WAngle.Zero, WAngle.Zero, WAngle.FromFacing(t.InitialFacing)), facings);
-			var turretOffset = body.LocalToWorld(t.Offset.Rotate(turretOrientation));
+			Func<int> facing = init.GetFacing();
+			Func<WRot> orientation = () => body.QuantizeOrientation(WRot.FromFacing(facing()), facings);
+			Func<WVec> turretOffset = () => body.LocalToWorld(t.Offset.Rotate(orientation()));
+			Func<int> zOffset = () =>
+			{
+				var tmpOffset = turretOffset();
+				return -(tmpOffset.Y + tmpOffset.Z) + 1;
+			};
 
-			yield return new SpriteActorPreview(anim, turretOffset, turretOffset.Y + turretOffset.Z, p, rs.Scale);
+			yield return new SpriteActorPreview(anim, turretOffset, zOffset, p, rs.Scale);
 		}
 	}
 
-	public class WithSpriteBarrel : UpgradableTrait<WithSpriteBarrelInfo>
+	public class WithSpriteBarrel : ConditionalTrait<WithSpriteBarrelInfo>
 	{
 		public readonly Animation DefaultAnimation;
 		readonly RenderSprites rs;
@@ -90,9 +99,9 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var localOffset = Info.LocalOffset + new WVec(-armament.Recoil, WDist.Zero, WDist.Zero);
 			var turretOffset = turreted != null ? turreted.Position(self) : WVec.Zero;
-			var turretOrientation = turreted != null ? turreted.LocalOrientation(self) : WRot.Zero;
-
 			var quantizedBody = body.QuantizeOrientation(self, self.Orientation);
+			var turretOrientation = turreted != null ? turreted.WorldOrientation(self) - quantizedBody : WRot.Zero;
+
 			var quantizedTurret = body.QuantizeOrientation(self, turretOrientation);
 			return turretOffset + body.LocalToWorld(localOffset.Rotate(quantizedTurret).Rotate(quantizedBody));
 		}
@@ -101,7 +110,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var b = self.Orientation;
 			var qb = body.QuantizeOrientation(self, b);
-			yield return turreted.LocalOrientation(self) + WRot.FromYaw(b.Yaw - qb.Yaw);
+			yield return turreted.WorldOrientation(self) - qb + WRot.FromYaw(b.Yaw - qb.Yaw);
 			yield return qb;
 		}
 	}

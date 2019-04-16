@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -38,7 +39,7 @@ namespace OpenRA.Mods.Common.Traits
 			paletteWidget = Exts.Lazy(() => Ui.Root.GetOrNull(info.ProductionPaletteWidget) as ProductionPaletteWidget);
 		}
 
-		public void SelectionChanged()
+		void INotifySelection.SelectionChanged()
 		{
 			// Disable for spectators
 			if (world.LocalPlayer == null)
@@ -54,14 +55,14 @@ namespace OpenRA.Mods.Common.Traits
 			if (queue == null)
 			{
 				var types = world.Selection.Actors.Where(a => a.IsInWorld && a.World.LocalPlayer == a.Owner)
-					.SelectMany(a => a.TraitsImplementing<Production>())
+					.SelectMany(a => a.TraitsImplementing<Production>().Where(p => !p.IsTraitDisabled))
 					.SelectMany(t => t.Info.Produces);
 
 				queue = world.LocalPlayer.PlayerActor.TraitsImplementing<ProductionQueue>()
 					.FirstOrDefault(q => q.Enabled && types.Contains(q.Info.Type));
 			}
 
-			if (queue == null)
+			if (queue == null || !queue.BuildableItems().Any())
 				return;
 
 			if (tabsWidget.Value != null)

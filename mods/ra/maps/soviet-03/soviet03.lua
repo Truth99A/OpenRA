@@ -1,8 +1,16 @@
-if Map.Difficulty == "Easy" then
+--[[
+   Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+   This file is part of OpenRA, which is free software. It is made
+   available to you under the terms of the GNU General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version. For more
+   information, see COPYING.
+]]
+if Map.LobbyOption("difficulty") == "easy" then
 	remainingTime = DateTime.Minutes(7)
-elseif Map.Difficulty == "Normal" then
+elseif Map.LobbyOption("difficulty") == "normal" then
 	remainingTime = DateTime.Minutes(6)
-elseif Map.Difficulty == "Hard" then
+elseif Map.LobbyOption("difficulty") == "hard" then
 	remainingTime = DateTime.Minutes(5)
 end
 
@@ -108,7 +116,7 @@ SpyHelicopterEscape = function()
 		spyHelicopterEscape = true
 		SpyFinalSequency()
 		Actor.Create("camera", true, { Owner = player, Location = CameraFinalArea.Location })
-		ExtractionHeli = Reinforcements.ReinforceWithTransport(germany, ExtractionHeliType, nil, ExtractionPath)[1]
+		ExtractionHeli = Reinforcements.ReinforceWithTransport(greece, ExtractionHeliType, nil, ExtractionPath)[1]
 		local exitPos = CPos.New(ExtractionPath[1].X, ExtractionPath[2].Y)
 		Trigger.AfterDelay(DateTime.Seconds(5), function()
 			if not TheSpy.IsDead and not ExtractionHeli.IsDead then
@@ -150,7 +158,7 @@ Trigger.OnEnteredFootprint(SpyHideout1Trigger, function(a, id)
 		spyHideout1Trigger = true
 		Trigger.RemoveFootprintTrigger(id)
 		Actor.Create("camera", true, { Owner = player, Location = SpyHideout1.Location })
-		if not TheSpy.IsDead and SpyHideout1.IsDead then
+		if not TheSpy.IsDead and not SpyHideout1.IsDead then
 			TheSpy.EnterTransport(SpyHideout1)
 		end
 	end
@@ -171,8 +179,8 @@ end)
 Trigger.OnEnteredFootprint(SpyHideout2Trigger, function(a, id)
 	if not spyHideout2Trigger and a.Owner == player then
 		spyHideout2Trigger = true
-		SpyGuards1 = Reinforcements.Reinforce(germany, EnemyReinforcements1SpyHideout2, { EnemyReinforcements1.Location, EnemyReinforcements1Goal.Location }, 0)
-		SpyGuards2 = Reinforcements.Reinforce(germany, EnemyReinforcements2SpyHideout2, { EnemyReinforcements2.Location, EnemyReinforcements2Goal.Location }, 0)
+		SpyGuards1 = Reinforcements.Reinforce(greece, EnemyReinforcements1SpyHideout2, { EnemyReinforcements1.Location, EnemyReinforcements1Goal.Location }, 0)
+		SpyGuards2 = Reinforcements.Reinforce(greece, EnemyReinforcements2SpyHideout2, { EnemyReinforcements2.Location, EnemyReinforcements2Goal.Location }, 0)
 		Utils.Do(SpyGuards1, function(actor)
 			if not actor.IsDead then
 				Trigger.OnIdle(actor, actor.Hunt)
@@ -220,7 +228,7 @@ Trigger.OnEnteredFootprint(SpyTransport1CheckpointTrigger, function(a, id)
 end)
 
 Trigger.OnEnteredFootprint(SpyTransport2CheckpointTrigger, function(a, id)
-	if not spyTransport2CheckpointTrigger and a.Owner == germany then
+	if not spyTransport2CheckpointTrigger and a.Owner == greece then
 		spyTransport2CheckpointTrigger = true
 		Transport.UnloadPassengers()
 		Trigger.AfterDelay(DateTime.Seconds(1), function()
@@ -256,7 +264,7 @@ end)
 Trigger.OnEnteredFootprint(SpyHideout3Trigger, function(a, id)
 	if not spyHideout3Trigger and a.Owner == player then
 		spyHideout3Trigger = true
-		if Map.Difficulty ~= "Hard" then
+		if Map.LobbyOption("difficulty") ~= "hard" then
 			Reinforcements.Reinforce(player, USSRReinforcements2, { ReinforcementSpawn.Location, CameraSpyHideout33.Location }, 0)
 			Media.PlaySpeechNotification(player, "ReinforcementsArrived")
 		end
@@ -326,7 +334,7 @@ end)
 WorldLoaded = function()
 	player = Player.GetPlayer("USSR")
 	enemy = Player.GetPlayer("England")
-	germany = Player.GetPlayer("Germany")
+	greece = Player.GetPlayer("Greece")
 	Camera.Position = Playerbase.CenterPosition
 	IntroSequence()
 	Trigger.OnObjectiveAdded(player, function(p, id)
@@ -363,7 +371,7 @@ Tick = function()
 	if not SpyHideout4.IsDead and SpyHideout4.HasPassengers then
 		spyReachedHideout4 = true
 	end
-	if remainingTime == DateTime.Minutes(5) and Map.Difficulty ~= "Hard" then
+	if remainingTime == DateTime.Minutes(5) and Map.LobbyOption("difficulty") ~= "hard" then
 		Media.PlaySpeechNotification(player, "WarningFiveMinutesRemaining")
 	elseif remainingTime == DateTime.Minutes(4) then
 		Media.PlaySpeechNotification(player, "WarningFourMinutesRemaining")

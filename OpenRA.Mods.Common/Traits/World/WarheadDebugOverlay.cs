@@ -1,17 +1,18 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
 using System.Collections.Generic;
-using System.Drawing;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Graphics;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
@@ -24,7 +25,7 @@ namespace OpenRA.Mods.Common.Traits
 		public object Create(ActorInitializer init) { return new WarheadDebugOverlay(this); }
 	}
 
-	public class WarheadDebugOverlay : IPostRender
+	public class WarheadDebugOverlay : IRenderAboveWorld
 	{
 		class WHImpact
 		{
@@ -60,7 +61,7 @@ namespace OpenRA.Mods.Common.Traits
 			impacts.Add(new WHImpact(pos, range, info.DisplayDuration, color));
 		}
 
-		public void RenderAfterWorld(WorldRenderer wr, Actor self)
+		void IRenderAboveWorld.RenderAboveWorld(Actor self, WorldRenderer wr)
 		{
 			foreach (var i in impacts)
 			{
@@ -72,11 +73,10 @@ namespace OpenRA.Mods.Common.Traits
 
 				foreach (var r in i.Range)
 				{
-					var tl = wr.ScreenPosition(i.CenterPosition - new WVec(r.Length, r.Length, 0));
-					var br = wr.ScreenPosition(i.CenterPosition + new WVec(r.Length, r.Length, 0));
-					var rect = RectangleF.FromLTRB(tl.X, tl.Y, br.X, br.Y);
+					var tl = wr.Screen3DPosition(i.CenterPosition - new WVec(r.Length, r.Length, 0));
+					var br = wr.Screen3DPosition(i.CenterPosition + new WVec(r.Length, r.Length, 0));
 
-					Game.Renderer.WorldRgbaColorRenderer.FillEllipse(rect, Color.FromArgb((int)alpha, i.Color));
+					Game.Renderer.WorldRgbaColorRenderer.FillEllipse(tl, br, Color.FromArgb((int)alpha, i.Color));
 
 					alpha -= rangeStep;
 				}

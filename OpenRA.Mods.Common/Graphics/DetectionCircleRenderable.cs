@@ -1,15 +1,16 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System.Drawing;
 using OpenRA.Graphics;
+using OpenRA.Primitives;
 
 namespace OpenRA.Mods.Common.Graphics
 {
@@ -30,7 +31,7 @@ namespace OpenRA.Mods.Common.Graphics
 			this.centerPosition = centerPosition;
 			this.radius = radius;
 			this.zOffset = zOffset;
-			this.trailCount = lineTrails;
+			trailCount = lineTrails;
 			this.trailSeparation = trailSeparation;
 			this.trailAngle = trailAngle;
 			this.color = color;
@@ -45,19 +46,19 @@ namespace OpenRA.Mods.Common.Graphics
 		public IRenderable WithPalette(PaletteReference newPalette)
 		{
 			return new DetectionCircleRenderable(centerPosition, radius, zOffset,
-				trailCount, trailAngle, trailSeparation, color, contrastColor);
+				trailCount, trailSeparation, trailAngle, color, contrastColor);
 		}
 
 		public IRenderable WithZOffset(int newOffset)
 		{
 			return new DetectionCircleRenderable(centerPosition, radius, newOffset,
-				trailCount, trailAngle, trailSeparation, color, contrastColor);
+				trailCount, trailSeparation, trailAngle, color, contrastColor);
 		}
 
 		public IRenderable OffsetBy(WVec vec)
 		{
 			return new DetectionCircleRenderable(centerPosition + vec, radius, zOffset,
-				trailCount, trailAngle, trailSeparation, color, contrastColor);
+				trailCount, trailSeparation, trailAngle, color, contrastColor);
 		}
 
 		public IRenderable AsDecoration() { return this; }
@@ -66,13 +67,13 @@ namespace OpenRA.Mods.Common.Graphics
 		public void Render(WorldRenderer wr)
 		{
 			var wcr = Game.Renderer.WorldRgbaColorRenderer;
-			var center = wr.ScreenPosition(centerPosition);
+			var center = wr.Screen3DPosition(centerPosition);
 
 			for (var i = 0; i < trailCount; i++)
 			{
 				var angle = trailAngle - new WAngle(i * (trailSeparation.Angle <= 512 ? 1 : -1));
 				var length = radius.Length * new WVec(angle.Cos(), angle.Sin(), 0) / 1024;
-				var end = wr.ScreenPosition(centerPosition + length);
+				var end = wr.Screen3DPosition(centerPosition + length);
 				var alpha = color.A - i * color.A / trailCount;
 
 				wcr.DrawLine(center, end, 3, Color.FromArgb(alpha, contrastColor));

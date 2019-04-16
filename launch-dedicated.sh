@@ -8,15 +8,26 @@
 
 Name="${Name:-"Dedicated Server"}"
 Mod="${Mod:-"ra"}"
-Dedicated="True"
-DedicatedLoop="True"
 ListenPort="${ListenPort:-"1234"}"
-ExternalPort="${ExternalPort:-"1234"}"
 AdvertiseOnline="${AdvertiseOnline:-"True"}"
-AllowPortForward="${AllowPortForward:-"False"}"
+Password="${Password:-""}"
+
+RequireAuthentication="${RequireAuthentication:-"False"}"
+ProfileIDBlacklist="${ProfileIDBlacklist:-""}"
+ProfileIDWhitelist="${ProfileIDWhitelist:-""}"
+
+EnableSingleplayer="${EnableSingleplayer:-"False"}"
+EnableSyncReports="${EnableSyncReports:-"False"}"
 
 while true; do
-     mono --debug OpenRA.Game.exe Game.Mod=$Mod Server.Dedicated=$Dedicated Server.DedicatedLoop=$DedicatedLoop \
-     Server.Name="$Name" Server.ListenPort=$ListenPort Server.ExternalPort=$ExternalPort \
-     Server.AdvertiseOnline=$AdvertiseOnline Server.AllowPortForward=$AllowPortForward
+     mono --debug OpenRA.Server.exe Game.Mod="$Mod" \
+     Server.Name="$Name" \
+     Server.ListenPort="$ListenPort" \
+     Server.AdvertiseOnline="$AdvertiseOnline" \
+     Server.EnableSingleplayer="$EnableSingleplayer" \
+     Server.Password="$Password" \
+     Server.RequireAuthentication="$RequireAuthentication" \
+     Server.ProfileIDBlacklist="$ProfileIDBlacklist" \
+     Server.ProfileIDWhitelist="$ProfileIDWhitelist" \
+     Server.EnableSyncReports="$EnableSyncReports"
 done

@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -14,17 +15,25 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Orders
 {
-	class AircraftMoveOrderTargeter : IOrderTargeter
+	public class AircraftMoveOrderTargeter : IOrderTargeter
 	{
-		public string OrderID { get { return "Move"; } }
-		public int OrderPriority { get { return 4; } }
-		public bool OverrideSelection { get { return false; } }
+		public string OrderID { get; protected set; }
+		public int OrderPriority { get; protected set; }
+		public bool TargetOverridesSelection(TargetModifiers modifiers)
+		{
+			return modifiers.HasModifier(TargetModifiers.ForceMove);
+		}
 
 		readonly AircraftInfo info;
 
-		public AircraftMoveOrderTargeter(AircraftInfo info) { this.info = info; }
+		public AircraftMoveOrderTargeter(AircraftInfo info)
+		{
+			this.info = info;
+			OrderID = "Move";
+			OrderPriority = 4;
+		}
 
-		public bool CanTarget(Actor self, Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
+		public virtual bool CanTarget(Actor self, Target target, List<Actor> othersAtTarget, ref TargetModifiers modifiers, ref string cursor)
 		{
 			if (target.Type != TargetType.Terrain)
 				return false;

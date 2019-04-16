@@ -1,31 +1,37 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using OpenRA.GameRules;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
-	[Desc("Damage taken by this actor is multiplied based on upgrade level.",
-		"Decrease to increase actor's apparent strength.",
+	[Desc("Modifies the damage applied to this actor.",
 		"Use 0 to make actor invulnerable.")]
-	public class DamageMultiplierInfo : UpgradeMultiplierTraitInfo
+	public class DamageMultiplierInfo : ConditionalTraitInfo
 	{
-		public override object Create(ActorInitializer init) { return new DamageMultiplier(this, init.Self.Info.Name); }
+		[FieldLoader.Require]
+		[Desc("Percentage modifier to apply.")]
+		public readonly int Modifier = 100;
+
+		public override object Create(ActorInitializer init) { return new DamageMultiplier(this); }
 	}
 
-	public class DamageMultiplier : UpgradeMultiplierTrait, IDamageModifier
+	public class DamageMultiplier : ConditionalTrait<DamageMultiplierInfo>, IDamageModifier
 	{
-		public DamageMultiplier(DamageMultiplierInfo info, string actorType)
-			: base(info, "DamageMultiplier", actorType) { }
+		public DamageMultiplier(DamageMultiplierInfo info)
+			: base(info) { }
 
-		public int GetDamageModifier(Actor attacker, IWarhead warhead) { return GetModifier(); }
+		int IDamageModifier.GetDamageModifier(Actor attacker, Damage damage)
+		{
+			return IsTraitDisabled ? 100 : Info.Modifier;
+		}
 	}
 }

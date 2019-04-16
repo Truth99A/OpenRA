@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -12,8 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using OpenRA.GameRules;
-using OpenRA.Mods.Common.Traits;
+using OpenRA.Mods.Common.Traits.Render;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Lint
@@ -24,22 +24,18 @@ namespace OpenRA.Mods.Common.Lint
 
 		List<MiniYamlNode> sequenceDefinitions;
 
-		public void Run(Action<string> emitError, Action<string> emitWarning, Map map)
+		public void Run(Action<string> emitError, Action<string> emitWarning, ModData modData, Map map)
 		{
-			if (map != null && !map.SequenceDefinitions.Any())
+			if (map.SequenceDefinitions == null)
 				return;
 
 			this.emitError = emitError;
 
-			var sequenceSource = map != null ? map.SequenceDefinitions : new List<MiniYamlNode>();
-			var partial = Game.ModData.Manifest.Sequences
-				.Select(MiniYaml.FromFile)
-				.Aggregate(MiniYaml.MergePartial);
-			sequenceDefinitions = MiniYaml.Merge(sequenceSource, partial);
+			sequenceDefinitions = MiniYaml.Load(map, modData.Manifest.Sequences, map.SequenceDefinitions);
 
-			var rules = map == null ? Game.ModData.DefaultRules : map.Rules;
+			var rules = map.Rules;
 			var factions = rules.Actors["world"].TraitInfos<FactionInfo>().Select(f => f.InternalName).ToArray();
-			var sequenceProviders = map == null ? rules.Sequences.Values : new[] { rules.Sequences[map.Tileset] };
+			var sequenceProviders = new[] { rules.Sequences };
 
 			foreach (var actorInfo in rules.Actors)
 			{
@@ -50,7 +46,7 @@ namespace OpenRA.Mods.Common.Lint
 						foreach (var sequenceProvider in sequenceProviders)
 						{
 							var image = renderInfo.GetImage(actorInfo.Value, sequenceProvider, faction);
-							if (sequenceDefinitions.All(s => s.Key != image.ToLowerInvariant()) && !actorInfo.Value.Name.Contains("^"))
+							if (sequenceDefinitions.All(s => s.Key != image.ToLowerInvariant()))
 								emitError("Sprite image {0} from actor {1} using faction {2} has no sequence definition."
 									.F(image, actorInfo.Value.Name, faction));
 						}
@@ -84,10 +80,16 @@ namespace OpenRA.Mods.Common.Lint
 										{
 											foreach (var imageOverride in LintExts.GetFieldValues(traitInfo, imageField, emitError))
 											{
-												if (!string.IsNullOrEmpty(imageOverride) && sequenceDefinitions.All(s => s.Key != imageOverride.ToLowerInvariant()))
+												if (string.IsNullOrEmpty(imageOverride))
+												{
+													emitWarning("Custom sprite image of actor {0} is null.".F(actorInfo.Value.Name));
+													continue;
+												}
+
+												if (sequenceDefinitions.All(s => s.Key != imageOverride.ToLowerInvariant()))
 													emitError("Custom sprite image {0} from actor {1} has no sequence definition.".F(imageOverride, actorInfo.Value.Name));
 												else
-													CheckDefintions(imageOverride, sequenceReference, actorInfo, sequence, faction, field, traitInfo);
+													CheckDefinitions(imageOverride, sequenceReference, actorInfo, sequence, faction, field, traitInfo);
 											}
 										}
 									}
@@ -96,7 +98,7 @@ namespace OpenRA.Mods.Common.Lint
 										foreach (var sequenceProvider in sequenceProviders)
 										{
 											var image = renderInfo.GetImage(actorInfo.Value, sequenceProvider, faction);
-											CheckDefintions(image, sequenceReference, actorInfo, sequence, faction, field, traitInfo);
+											CheckDefinitions(image, sequenceReference, actorInfo, sequence, faction, field, traitInfo);
 										}
 									}
 								}
@@ -149,7 +151,7 @@ namespace OpenRA.Mods.Common.Lint
 			}
 		}
 
-		void CheckDefintions(string image, SequenceReferenceAttribute sequenceReference,
+		void CheckDefinitions(string image, SequenceReferenceAttribute sequenceReference,
 			KeyValuePair<string, ActorInfo> actorInfo, string sequence, string faction, FieldInfo field, ITraitInfo traitInfo)
 		{
 			var definitions = sequenceDefinitions.FirstOrDefault(n => n.Key == image.ToLowerInvariant());

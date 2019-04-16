@@ -1,17 +1,17 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
-using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Primitives;
 
 namespace OpenRA.Traits
 {
@@ -33,9 +33,9 @@ namespace OpenRA.Traits
 			this.info = info;
 		}
 
-		public void LoadPlayerPalettes(WorldRenderer wr, string playerName, HSLColor color, bool replaceExisting)
+		public void LoadPlayerPalettes(WorldRenderer wr, string playerName, Color color, bool replaceExisting)
 		{
-			var argb = (uint)Color.FromArgb(128, color.RGB).ToArgb();
+			var argb = (uint)Color.FromArgb(128, color).ToArgb();
 			var pal = new ImmutablePalette(Enumerable.Range(0, Palette.Size).Select(i => i == 0 ? 0 : argb));
 			wr.AddPalette(info.BaseName + playerName, pal, false, replaceExisting);
 		}

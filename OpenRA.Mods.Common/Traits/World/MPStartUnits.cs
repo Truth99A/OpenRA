@@ -1,10 +1,11 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2015 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation. For more information,
- * see COPYING.
+ * as published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version. For more
+ * information, see COPYING.
  */
 #endregion
 
@@ -25,8 +26,11 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Only available when selecting one of these factions.", "Leave empty for no restrictions.")]
 		public readonly HashSet<string> Factions = new HashSet<string>();
 
-		[Desc("The mobile construction vehicle.")]
+		[Desc("The actor at the center, usually the mobile construction vehicle.")]
 		public readonly string BaseActor = null;
+
+		[Desc("Offset from the spawn point, BaseActor will spawn at.")]
+		public readonly CVec BaseActorOffset = CVec.Zero;
 
 		[Desc("A group of units ready to defend or scout.")]
 		public readonly string[] SupportActors = { };
@@ -36,6 +40,12 @@ namespace OpenRA.Mods.Common.Traits
 
 		[Desc("Outer radius for spawning support actors")]
 		public readonly int OuterSupportRadius = 4;
+
+		[Desc("Initial facing of BaseActor. -1 means random.")]
+		public readonly int BaseActorFacing = 128;
+
+		[Desc("Initial facing of SupportActors. -1 means random.")]
+		public readonly int SupportActorsFacing = -1;
 	}
 
 	public class MPStartUnits { }
