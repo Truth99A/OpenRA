@@ -35,6 +35,8 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		[VoiceReference] public readonly string Voice = "Action";
 
+		public readonly string DetonationSound = "madexplo.aud";
+
 		[GrantedConditionReference]
 		[Desc("The condition to grant to self while deployed.")]
 		public readonly string DeployedCondition = null;
@@ -145,6 +147,8 @@ namespace OpenRA.Mods.Cnc.Traits
 					// Use .FromPos since this weapon needs to affect more than just the MadTank actor
 					info.ThumpDamageWeaponInfo.Impact(Target.FromPos(self.CenterPosition), self, Enumerable.Empty<int>());
 				}
+
+				self.QueueActivity(new CallFunc(() => Game.Sound.Play(SoundType.World, info.DetonationSound, self.CenterPosition)));
 			});
 		}
 

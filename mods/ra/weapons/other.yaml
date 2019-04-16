@@ -219,5 +219,5 @@ MADTankThump:
 	InvalidTargets: MADTank, Infantry
 	Warhead@1Dam: HealthPercentageDamage
 		Spread: 7c0
-		Damage: 1
+		Damage: 3
 		InvalidTargets: MADTank, Infantry
